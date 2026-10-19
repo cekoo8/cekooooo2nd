@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Beat Rhythm Game Auto-Detect</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}
+:root{--bg-img:none}
+body{background:#121214;color:#fff;display:flex;justify-content:center;align-items:center;min-height:100vh;padding:10px}
+
+/* Menu utama */
+.menu-overlay{position:fixed;inset:0;background:rgba(15,15,26,.95);backdrop-filter:blur(8px);display:flex;justify-content:center;align-items:center;z-index:1000;transition:opacity .3s,visibility .3s}
+.menu-overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
+.menu-card{background:#1e1e2f;padding:40px;border-radius:20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5),0 0 20px rgba(0,242,254,.2);border:1px solid rgba(255,255,255,.1);max-width:400px;width:90%}
+.menu-title{font-size:2.2rem;color:#00f2fe;margin-bottom:5px;text-shadow:0 0 10px rgba(0,242,254,.5)}
+.menu-subtitle{color:#a0a0c0;font-size:.9rem;margin-bottom:30px}
+.menu-buttons{display:flex;flex-direction:column;gap:15px}
+.menu-btn{padding:14px 24px;font-size:1rem;font-weight:bold;color:#fff;background:#2a2a40;border:none;border-radius:12px;cursor:pointer;transition:all .2s}
+.menu-btn:hover{background:#3b3b5c;transform:translateY(-2px)}
+.menu-btn.primary{background:linear-gradient(135deg,#00c6ff,#0072ff);box-shadow:0 4px 15px rgba(0,114,255,.4)}
+.menu-btn.primary:hover{box-shadow:0 6px 20px rgba(0,114,255,.6)}
+
+/* Modal cara main */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;justify-content:center;align-items:center;z-index:1001;padding:15px}
+.modal.hidden{display:none}
+.modal-content{background:#1e1e2f;padding:30px;border-radius:16px;max-width:450px;color:#fff;text-align:left}
+.modal-content h2{color:#00f2fe;margin-bottom:15px}
+.modal-content ul{list-style:none;margin-bottom:20px}
+.modal-content li{margin-bottom:10px;line-height:1.5;color:#d0d0e0}
+
+/* Game */
+.game-container{width:100%;max-width:420px;background:rgba(30,30,36,.88);padding:20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.5);text-align:center}
+.header h1{font-size:1.3rem;margin-bottom:8px;color:#00e5ff}
+.score-board{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;font-size:1rem;font-weight:bold}
+.song-name{max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8rem;font-weight:normal;color:#a0a0c0}
+.hp-container{width:100%;height:8px;background:#333;border-radius:4px;overflow:hidden;margin-bottom:10px}
+.hp-fill{width:100%;height:100%;background:linear-gradient(90deg,#ff4757,#2ed573);transition:width .2s}
+.feedback{font-weight:bold;height:24px;margin-bottom:10px}
+.upload-section{margin-bottom:15px}
+.upload-section input{font-size:.85rem;background:#2a2a35;padding:6px;border-radius:6px;color:#fff;width:100%}
+
+.game-board{position:relative;width:100%;height:380px;background:#0d0d11;border-radius:8px;display:flex;overflow:hidden;border:2px solid #2a2a35;transition:transform .05s;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.game-board.hit-shake{transform:scale(1.01)}
+
+/* Angka combo di tengah papan: besar, transparan, angka saja */
+.combo-display{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;font-size:7rem;font-weight:900;line-height:1;color:rgba(255,255,255,.2);text-shadow:0 0 30px rgba(0,229,255,.3);pointer-events:none;z-index:0;opacity:0;transition:opacity .15s}
+.combo-display.show{opacity:1}
+.combo-display.pop{animation:pop .15s ease-out}
+@keyframes pop{from{transform:scale(1.25)}to{transform:scale(1)}}
+
+.track{flex:1;position:relative;z-index:1;border-right:1px solid #22222e;touch-action:none}
+.track:last-child{border-right:none}
+.target-zone{position:absolute;bottom:15px;left:50%;transform:translateX(-50%);width:80%;height:65px;border:2px solid #555;border-radius:10px;background:#1a1a22;display:flex;flex-direction:column;justify-content:center;align-items:center;cursor:pointer;transition:background .1s,border-color .1s,box-shadow .1s}
+.target-zone .icon{font-size:1.2rem;font-weight:bold;line-height:1}
+.target-zone .sub{font-size:.65rem;color:#00e5ff;margin-top:3px}
+.target-zone.active{border-color:#00e5ff;background:rgba(0,229,255,.3);box-shadow:0 0 15px #00e5ff}
+.target-zone.hit-perfect{border-color:#2ed573;box-shadow:0 0 20px #2ed573;background:rgba(46,213,115,.4)}
+.target-zone.hit-good{border-color:#ffa502;box-shadow:0 0 20px #ffa502;background:rgba(255,165,2,.35)}
+
+.note{--c:#fff;position:absolute;width:45px;height:45px;left:calc(50% - 22.5px);border-radius:8px;background:var(--c);display:flex;justify-content:center;align-items:center;font-size:1.3rem;font-weight:bold;box-shadow:0 0 10px var(--c);animation:noteIn .18s ease-out,notePulse .6s ease-in-out .18s infinite alternate}
+.note::before{content:"";position:absolute;left:9px;right:9px;bottom:100%;height:70px;border-radius:8px;background:linear-gradient(to top,var(--c),transparent);opacity:.45;pointer-events:none}
+.note.near{filter:brightness(1.3) drop-shadow(0 0 8px var(--c));transform:scale(1.12)}
+.note.missed{animation:noteMiss .25s ease-in forwards;filter:grayscale(1)}
+.note.KeyA{--c:#ff4757}.note.KeyS{--c:#2ed573}.note.KeyK{--c:#ffa502}.note.KeyL{--c:#1e90ff}
+@keyframes noteIn{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes notePulse{from{box-shadow:0 0 8px var(--c)}to{box-shadow:0 0 16px 3px var(--c)}}
+@keyframes noteMiss{to{opacity:0;transform:scale(.6)}}
+
+/* Tombol kontrol */
+.controls{display:flex;gap:8px;margin-top:15px}
+.ctrl-btn{flex:1;padding:10px 6px;font-size:.85rem;font-weight:bold;color:#fff;background:#2a2a40;border:none;border-radius:8px;cursor:pointer;transition:background .2s,transform .1s}
+.ctrl-btn:hover:not(:disabled){background:#3b3b5c}
+.ctrl-btn:active:not(:disabled){transform:scale(.97)}
+#btnStop:not(:disabled){background:#b8323f}
+#btnStop:hover:not(:disabled){background:#d63c4b}
+button:disabled{opacity:.4;cursor:not-allowed}
+#startBtn{margin-top:10px;width:100%;padding:12px;font-size:1rem;font-weight:bold;background:#00e5ff;color:#000;border:none;border-radius:8px;cursor:pointer;transition:transform .1s,background .2s}
+#startBtn:hover:not(:disabled){background:#00b3ca}
+#startBtn:active:not(:disabled){transform:scale(.98)}
+button{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.menu-btn.hidden{display:none}
+.menu-card{max-height:92vh;overflow-y:auto}
+.bg-status{min-height:1.2em;margin-top:14px;font-size:.8rem;color:#a0a0c0}
+.game-board.miss-flash{border-color:#ff4757;box-shadow:inset 0 0 40px rgba(255,71,87,.45)}
+.hit-fx{position:absolute;left:50%;bottom:var(--fxb,47px);width:0;height:0;pointer-events:none;z-index:3}
+.fx-ring{position:absolute;left:-22px;top:-22px;width:44px;height:44px;border:3px solid var(--c);border-radius:50%;animation:fxRing .45s ease-out forwards}
+.fx-spark{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--c);box-shadow:0 0 6px var(--c);animation:fxSpark .45s ease-out forwards}
+.fx-text{position:absolute;left:-40px;top:-48px;width:80px;text-align:center;font-size:.7rem;font-weight:900;letter-spacing:.05em;animation:fxRise .55s ease-out forwards}
+.fx-text.perfect{color:#2ed573;text-shadow:0 0 8px #2ed573}
+.fx-text.good{color:#ffa502;text-shadow:0 0 8px #ffa502}
+@keyframes fxRing{from{transform:scale(.3);opacity:1}to{transform:scale(2.2);opacity:0}}
+@keyframes fxSpark{to{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+@keyframes fxRise{from{transform:translateY(0);opacity:1}to{transform:translateY(-28px);opacity:0}}
+@media (prefers-reduced-motion:reduce){.note{animation:none}.hit-fx{display:none}}
+.result-card{width:100%;max-width:360px;text-align:center}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.result-grid div{background:#2a2a40;border-radius:12px;padding:14px 8px}
+.r-label{display:block;font-size:.75rem;color:#a0a0c0;margin-bottom:4px}
+.result-grid strong{font-size:1.5rem;color:#00f2fe}
+.result-actions{display:flex;flex-direction:column;gap:10px}
+.shop-card{width:100%;max-width:440px;max-height:92vh;overflow-y:auto}
+.shop-sp{margin-bottom:12px;color:#d0d0e0}
+.shop-sp strong{color:#00f2fe;font-size:1.2rem}
+.shop-list{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.shop-item{display:grid;grid-template-columns:96px 1fr;gap:8px 12px;background:#2a2a40;border-radius:12px;padding:10px;border:2px solid transparent}
+.shop-item.equipped{border-color:#00e5ff}
+.pv{background:#0d0d11;border-radius:8px;overflow:hidden;height:150px}
+.pv-lane{position:relative;width:100%;height:100%;--fxb:30px}
+.pv-zone{position:absolute;left:12%;right:12%;bottom:15px;height:30px;border:2px solid #555;border-radius:8px;background:#1a1a22}
+.shop-info{display:flex;flex-direction:column;gap:4px;text-align:left;font-size:.8rem;color:#a0a0c0}
+.shop-info strong{color:#fff;font-size:1rem}
+.shop-info .price{color:#00f2fe;font-weight:bold;margin-top:auto}
+.shop-btn{grid-column:1/-1;padding:10px}
+.result-grid .wide{grid-column:1/-1}
+
+/* === Varian 1: Komet === */
+[data-fx="comet"] .note{border-radius:50%;background:radial-gradient(circle,#fff 0 25%,var(--c) 70%);box-shadow:0 0 14px 4px var(--c);animation:cometIn .2s ease-out}
+[data-fx="comet"] .note::before{height:120px;left:12px;right:12px;opacity:.75;border-radius:50% 50% 0 0;filter:blur(1.5px)}
+[data-fx="comet"] .note.near{transform:scale(1.18)}
+[data-fx="comet"] .note.missed{animation:cometMiss .3s ease-in forwards}
+[data-fx="comet"] .fx-ring{border:0;background:radial-gradient(circle,#fff,var(--c) 45%,transparent 70%);animation:fxFlash .3s ease-out forwards}
+[data-fx="comet"] .fx-spark{width:18px;height:3px;left:-9px;top:-1px;border-radius:2px;animation:cometSpark .45s ease-out forwards}
+@keyframes cometIn{from{transform:translateY(-30px) scale(.5);opacity:0}to{transform:none;opacity:1}}
+@keyframes cometMiss{to{opacity:0;transform:translateY(60px) scale(.5)}}
+@keyframes fxFlash{from{transform:scale(.2);opacity:1}to{transform:scale(2.4);opacity:0}}
+@keyframes cometSpark{from{transform:rotate(var(--ang)) translateX(10px) scaleX(1)}to{transform:rotate(var(--ang)) translateX(70px) scaleX(.2);opacity:0}}
+
+/* === Varian 2: Kristal === */
+[data-fx="crystal"] .note{background:linear-gradient(135deg,#fff,var(--c) 45%,rgba(255,255,255,.7));border:2px solid rgba(255,255,255,.8);box-shadow:0 0 12px var(--c);animation:crySway .5s ease-in-out infinite alternate}
+[data-fx="crystal"] .note::before{height:80px;border-radius:0;opacity:.7;background:repeating-linear-gradient(to top,var(--c) 0 5px,transparent 5px 16px)}
+[data-fx="crystal"] .note.near{filter:brightness(1.4) drop-shadow(0 0 10px #fff)}
+[data-fx="crystal"] .note.missed{animation:cryMiss .3s ease-in forwards}
+[data-fx="crystal"] .fx-ring{width:30px;height:30px;left:-15px;top:-15px;border:3px solid #fff;border-radius:3px;animation:cryRing .4s ease-out forwards}
+[data-fx="crystal"] .fx-spark{width:8px;height:8px;border-radius:1px;background:linear-gradient(135deg,#fff,var(--c));animation:crySpark .6s ease-out forwards}
+@keyframes crySway{from{transform:perspective(220px) rotateY(-35deg)}to{transform:perspective(220px) rotateY(35deg)}}
+@keyframes cryMiss{0%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}100%{opacity:0;transform:translateY(40px) rotate(25deg) scale(.6)}}
+@keyframes cryRing{from{transform:rotate(45deg) scale(.3);opacity:1}to{transform:rotate(45deg) scale(2.6);opacity:0}}
+@keyframes crySpark{from{transform:translate(0,0) rotate(0)}to{transform:translate(var(--dx),calc(var(--dy) + 40px)) rotate(var(--rot));opacity:0}}
+
+/* === Varian 3: Api === */
+[data-fx="inferno"] .note{background:radial-gradient(circle at 50% 70%,#ffe27a,var(--c) 70%);box-shadow:0 0 12px #ff6a00,0 0 24px 4px rgba(255,60,0,.6);animation:flame .18s ease-in-out infinite alternate}
+[data-fx="inferno"] .note::before{height:90px;left:6px;right:6px;border-radius:50% 50% 0 0;background:linear-gradient(to top,#ff9a00,rgba(255,60,0,.5),transparent);filter:blur(3px);opacity:.8;transform-origin:bottom;animation:flameTail .15s ease-in-out infinite alternate}
+[data-fx="inferno"] .note.near{filter:brightness(1.3)}
+[data-fx="inferno"] .note.missed{animation:fireOut .3s ease-out forwards}
+[data-fx="inferno"] .fx-ring{border:0;width:50px;height:50px;left:-25px;top:-25px;background:radial-gradient(circle,#fff6b0,#ff9a00 45%,rgba(255,60,0,.6) 65%,transparent 70%);animation:fireBall .4s ease-out forwards}
+[data-fx="inferno"] .fx-spark{background:#ff9a00;box-shadow:0 0 8px #ff4d00;animation:ember .6s ease-out forwards}
+@keyframes flame{from{transform:scale(1) rotate(-2deg)}to{transform:scale(1.07) rotate(2deg)}}
+@keyframes flameTail{from{transform:scaleY(.85)}to{transform:scaleY(1.1)}}
+@keyframes fireOut{to{opacity:0;filter:grayscale(1) brightness(.5);transform:translateY(-14px) scale(.7)}}
+@keyframes fireBall{from{transform:scale(.2);opacity:1}to{transform:scale(2.8);opacity:0}}
+@keyframes ember{to{transform:translate(var(--dx),calc(var(--dy) - 40px)) scale(.3);opacity:0}}
+@media (prefers-reduced-motion:reduce){[data-fx] .note,[data-fx] .note::before{animation:none}}
+.sp-badge{color:#00e5ff;white-space:nowrap}
+.song-name{max-width:none;flex:1;min-width:0;text-align:right}
+
+.result-card{max-height:92vh;overflow-y:auto}
+.song-info{background:#2a2a40;border-radius:12px;padding:12px 14px;margin-bottom:20px;text-align:left;font-size:.85rem}
+.song-info h3{color:#00f2fe;font-size:.95rem;margin-bottom:8px}
+.song-info p{display:flex;justify-content:space-between;gap:12px;padding:3px 0;color:#a0a0c0}
+.song-info b{color:#fff;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%}
+.shop-tabs{display:flex;gap:8px;margin-bottom:12px}
+.shop-tab{flex:1;padding:10px}.shop-tab.on{background:linear-gradient(135deg,#00c6ff,#0072ff)}
+.shop-item.bar-item{grid-template-columns:1fr}
+.pv-bar{background:#0d0d11;border-radius:8px;padding:22px 12px 10px}
+
+/* === Bar durasi lagu === */
+.bar-row{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-size:.7rem;color:#a0a0c0;font-variant-numeric:tabular-nums}
+.bar-row>span{min-width:32px}.bar-row>span:first-child{text-align:right}
+.song-bar{position:relative;flex:1;height:22px}
+.sb-track{position:absolute;inset:0;overflow:hidden;border:2px solid #2f3b4d;border-radius:11px;background:#1c1c28}
+.sb-fill{position:absolute;left:0;top:0;bottom:0;width:0}
+.sb-head{position:absolute;top:50%;left:0;width:0;height:0;pointer-events:none;z-index:2}
+.sb-head i{position:absolute;left:0;top:0;width:2px;height:2px;background:var(--p,#fff);opacity:0}
+.sb-head i:nth-child(2){animation-delay:.4s;--dx:-6px}.sb-head i:nth-child(3){animation-delay:.8s;--dx:8px}
+[data-bar=grass] .sb-head i,[data-bar=castle] .sb-head i,[data-bar=galaxy] .sb-head i{animation:sbUp 1.2s linear infinite}
+@keyframes sbUp{from{opacity:1;transform:translate(0,0)}to{opacity:0;transform:translate(var(--dx,4px),-16px)}}
+@keyframes sbSweep{0%{transform:translateX(0)}70%,100%{transform:translateX(480px)}}
+@keyframes sbTw{from{opacity:.15}to{opacity:1}}
+.pv-anim .sb-fill{animation:pvFill 4s linear infinite}.pv-anim .sb-head{animation:pvHead 4s linear infinite}
+@keyframes pvFill{from{width:0}to{width:100%}}@keyframes pvHead{from{left:0}to{left:100%}}
+
+/* Neon (gratis) */
+[data-bar=neon] .sb-fill{background:linear-gradient(90deg,#0072ff,#00e5ff);box-shadow:0 0 10px #00e5ff}
+[data-bar=neon] .sb-head::before{content:"";position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:#fff;box-shadow:0 0 8px 3px #00e5ff}
+
+/* Tanah & Rumput (100 SP) */
+[data-bar=grass] .sb-track{border-color:#2b1a0d;border-radius:3px;background:linear-gradient(#2f4a24 0 5px,#4a3220 5px)}
+[data-bar=grass] .sb-fill{background:
+ linear-gradient(#9cf56b,#9cf56b) 0 0/100% 2px no-repeat,
+ linear-gradient(#52b83a,#52b83a) 0 2px/100% 4px no-repeat,
+ repeating-linear-gradient(90deg,#52b83a 0 2px,transparent 2px 6px) 0 6px/100% 3px no-repeat,
+ repeating-linear-gradient(90deg,transparent 0 9px,#3e9a2c 9px 11px,transparent 11px 17px) 0 6px/100% 4px no-repeat,
+ repeating-linear-gradient(90deg,transparent 0 4px,#6b4220 4px 6px,transparent 6px 13px) 0 11px/100% 2px no-repeat,
+ repeating-linear-gradient(90deg,transparent 0 9px,#b5854a 9px 11px,transparent 11px 19px) 0 14px/100% 2px no-repeat,
+ repeating-linear-gradient(90deg,transparent 0 30px,#9a9088 30px 33px,transparent 33px 71px) 0 12px/100% 3px no-repeat,#8a5a2c}
+[data-bar=grass] .sb-fill::before{content:"";position:absolute;inset:0 0 auto;height:9px;background:repeating-linear-gradient(90deg,transparent 0 7px,rgba(200,255,150,.9) 7px 9px,transparent 9px 19px) 0 1px/100% 2px no-repeat;animation:sbWind 1.2s steps(3) infinite alternate}
+@keyframes sbWind{to{background-position:3px 1px}}
+[data-bar=grass] .sb-fill::after{content:"";position:absolute;top:0;bottom:0;left:-40px;width:36px;background:linear-gradient(100deg,transparent,rgba(255,255,210,.4),transparent);animation:sbSweep 3s linear infinite}
+[data-bar=grass] .sb-head{--p:#fff3a0}[data-bar=grass] .sb-head i{top:-10px}
+[data-bar=grass] .sb-head::before{content:"";position:absolute;left:-1px;top:-19px;width:2px;height:2px;background:#8bee66;box-shadow:0 2px #2f8a2a,0 4px #2f8a2a,0 6px #2f8a2a,0 8px #2f8a2a,-2px 0 #5fd048,-4px 0 #5fd048,-4px -2px #8bee66,2px 2px #5fd048,4px 2px #5fd048,4px 0 #8bee66,6px 0 #8bee66;animation:sbBob .7s steps(1) infinite}
+@keyframes sbBob{50%{transform:translateY(-2px)}}
+
+/* Lantai Kastil (200 SP) */
+[data-bar=castle] .sb-track{border-color:#12121a;border-radius:3px;background:
+ linear-gradient(#0d0d14,#0d0d14) 0 8px/100% 1px no-repeat,
+ repeating-linear-gradient(90deg,#0d0d14 0 2px,transparent 2px 34px) 0 0/100% 9px no-repeat,
+ repeating-linear-gradient(90deg,#0d0d14 0 2px,transparent 2px 26px) 12px 9px/100% 9px no-repeat,#232331}
+[data-bar=castle] .sb-fill{background:
+ linear-gradient(#e6c04a,#e6c04a) 0 0/100% 1px no-repeat,
+ linear-gradient(#4b4f63,#4b4f63) 0 8px/100% 2px no-repeat,
+ repeating-linear-gradient(90deg,#4b4f63 0 2px,transparent 2px 34px) 0 0/100% 9px no-repeat,
+ repeating-linear-gradient(90deg,#4b4f63 0 2px,transparent 2px 26px) 12px 9px/100% 9px no-repeat,
+ repeating-linear-gradient(90deg,rgba(255,255,255,.09) 0 17px,transparent 17px 51px) 0 0/100% 9px no-repeat,
+ repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 13px,transparent 13px 39px) 0 9px/100% 9px no-repeat,#858aa2}
+[data-bar=castle] .sb-fill::before{content:"";position:absolute;top:0;bottom:0;left:-30px;width:24px;background:linear-gradient(100deg,transparent,rgba(255,240,200,.35),transparent);animation:sbSweep 3.4s linear infinite}
+[data-bar=castle] .sb-fill::after{content:"";position:absolute;inset:0;background:radial-gradient(80px 30px at 100% 30%,rgba(255,170,70,.6),transparent 70%);animation:sbFlick .18s ease-in-out infinite alternate}
+@keyframes sbFlick{from{opacity:.65}to{opacity:1}}
+[data-bar=castle] .sb-head{--p:#ffb347}[data-bar=castle] .sb-head i{top:-22px}
+[data-bar=castle] .sb-head::before{content:"";position:absolute;left:-2px;top:-12px;width:4px;height:12px;background:linear-gradient(90deg,#4a2f16,#9a6a35,#4a2f16)}
+[data-bar=castle] .sb-head::after{content:"";position:absolute;left:-5px;top:-25px;width:10px;height:14px;border-radius:50% 50% 50% 50%/70% 70% 30% 30%;background:radial-gradient(ellipse at 50% 75%,#fff7c4 0 20%,#ffb52e 50%,#ff5a1a 80%);box-shadow:0 0 12px 4px rgba(255,140,40,.55);transform-origin:50% 100%;animation:sbFlame .15s ease-in-out infinite alternate}
+@keyframes sbFlame{from{transform:scale(1,1) rotate(-4deg)}to{transform:scale(.88,1.12) rotate(4deg)}}
+
+/* Galaksi (300 SP) */
+[data-bar=galaxy] .sb-track{border-color:#4c3a99;background:
+ radial-gradient(circle,rgba(255,255,255,.7) 0 .6px,transparent 1.1px) 0 0/23px 17px,
+ radial-gradient(circle,rgba(190,170,255,.6) 0 .5px,transparent 1px) 9px 7px/31px 13px,
+ linear-gradient(90deg,#07041a,#140a38,#07041a)}
+[data-bar=galaxy] .sb-track::before{content:"";position:absolute;inset:0;background:radial-gradient(circle,#fff 0 1px,transparent 1.6px) 5px 4px/37px 19px;animation:sbTw 1.6s ease-in-out infinite alternate}
+[data-bar=galaxy] .sb-track::after{content:"";position:absolute;left:100%;top:3px;width:46px;height:2px;background:linear-gradient(90deg,#fff,transparent);transform:rotate(-4deg);animation:sbShoot 3.6s linear infinite;z-index:3}
+@keyframes sbShoot{0%{transform:translate(0,0) rotate(-4deg);opacity:1}35%,100%{transform:translate(-420px,14px) rotate(-4deg);opacity:0}}
+[data-bar=galaxy] .sb-fill{background:linear-gradient(90deg,#3b1d8f,#7c3aed,#d946ef,#06b6d4,#3b1d8f) 0 0/320px 100%;box-shadow:0 0 12px #a78bfa;animation:sbNeb 5s linear infinite}
+@keyframes sbNeb{to{background-position:320px 0}}
+.pv-anim[data-bar=galaxy] .sb-fill{animation:sbNeb 5s linear infinite,pvFill 4s linear infinite}
+[data-bar=galaxy] .sb-fill::before{content:"";position:absolute;inset:0;background:radial-gradient(circle,#fff 0 1px,transparent 1.6px) 3px 4px/27px 18px,radial-gradient(circle,#d8ecff 0 .8px,transparent 1.4px) 14px 11px/19px 14px;animation:sbDrift 2.5s linear infinite,sbTw 1.3s ease-in-out infinite alternate}
+@keyframes sbDrift{to{background-position:-24px 4px,-5px 11px}}
+[data-bar=galaxy] .sb-fill::after{content:"";position:absolute;inset:0;background:radial-gradient(circle,#fff 0 1.2px,rgba(160,230,255,.5) 2px,transparent 3px) 8px 9px/43px 20px;animation:sbTw .9s ease-in-out infinite alternate-reverse}
+[data-bar=galaxy] .sb-head{--p:#c4b5fd;filter:drop-shadow(0 0 5px #7dd3fc)}
+[data-bar=galaxy] .sb-head::before{content:"";position:absolute;right:2px;top:-2px;width:44px;height:4px;border-radius:2px;background:linear-gradient(90deg,transparent,rgba(125,211,252,.9))}
+[data-bar=galaxy] .sb-head::after{content:"";position:absolute;left:-9px;top:-9px;width:18px;height:18px;background:radial-gradient(circle,#fff 0 25%,#a5f3fc 60%);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);animation:sbSpin 2s linear infinite}
+@keyframes sbSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.song-bar *,.song-bar ::before,.song-bar ::after{animation:none!important}.pv-anim .sb-fill{width:60%}.pv-anim .sb-head{left:60%}}
+.bg-img{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;filter:brightness(.22);display:none;pointer-events:none}
+.board-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;filter:brightness(.4);display:none;pointer-events:none}
+.wp-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.wp-item{background:#2a2a40;border-radius:10px;padding:6px;border:2px solid transparent;display:flex;flex-direction:column;gap:6px;min-width:0}
+.wp-item.active{border-color:#00e5ff}
+.wp-item img{width:100%;height:90px;object-fit:cover;border-radius:6px;background:#0d0d11}
+.wp-item span{font-size:.7rem;color:#a0a0c0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wp-item .row{display:flex;gap:6px}.wp-item button{flex:1;padding:6px;font-size:.75rem}
+.wp-actions{display:flex;flex-direction:column;gap:8px}
+.wp-empty{grid-column:1/-1;color:#a0a0c0;font-size:.85rem;padding:10px}
+.menu-btn.danger,#btnEraseGo{background:#b8323f}
+.menu-btn.danger:hover:not(:disabled){background:#d63c4b}
+.erase-input{width:100%;padding:10px;border-radius:8px;border:1px solid #555;background:#2a2a35;color:#fff;margin:6px 0 12px;font-size:1rem}
+.greet{color:#2ed573;font-weight:bold;margin-bottom:14px;line-height:1.4}
+.about-hello{color:#2ed573;font-weight:bold;font-size:1.1rem;margin-bottom:10px}
+.about-name{display:flex;gap:8px;margin:6px 0 4px}.about-name .erase-input{margin:0;flex:1;min-width:0}.about-name .menu-btn{padding:10px 14px}
+.about-h{color:#00f2fe;font-size:.95rem;margin:14px 0 8px}
+.song-info.plain p{padding:3px 0}
+.shop-tabs{flex-wrap:wrap}.shop-tab{flex:1 1 30%;font-size:.78rem;padding:8px 4px}
+.bar-item .pv{height:110px}
+@keyframes hueSpin{to{filter:hue-rotate(360deg)}}
+/* Rank */
+.rank-wrap{--c1:#999;--c2:#555;--spd:6s;--g:1;position:relative;display:flex;justify-content:center;align-items:center;width:100%;height:112px;overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 16%,#000 84%,transparent);mask-image:linear-gradient(transparent,#000 16%,#000 84%,transparent)}
+.rank-wrap>*{pointer-events:none}
+.rank-aura{position:absolute;left:50%;top:50%;width:170px;height:170px;margin:-85px;border-radius:50%;background:radial-gradient(circle,var(--c1),transparent 62%);animation:rkAura calc(3.2s - var(--g)*.25s) ease-in-out infinite alternate}
+@keyframes rkAura{from{transform:scale(.85);opacity:.18}to{transform:scale(1.15);opacity:.5}}
+[data-r="6"] .rank-aura,[data-r="7"] .rank-aura{width:240px;height:240px;margin:-120px;opacity:.6;background:repeating-conic-gradient(var(--c1) 0 5deg,transparent 5deg 15deg);-webkit-mask-image:radial-gradient(circle,#000 10%,transparent 68%);mask-image:radial-gradient(circle,#000 10%,transparent 68%);animation:rkSpin 14s linear infinite}
+[data-r="7"] .rank-aura{background:repeating-conic-gradient(#ff3b3b 0 5deg,#ffd23b 5deg 10deg,#3bff6a 10deg 15deg,#3bd1ff 15deg 20deg,#a23bff 20deg 25deg)}
+.rank-orbit{position:absolute;left:50%;top:50%;width:0;height:0;transform:scale(1,.42)}
+.rank-orbit>div{width:0;height:0;animation:rkSpin calc(9s - var(--g)*.8s) linear infinite}
+.rank-orbit i{position:absolute;left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--c2);box-shadow:0 0 8px 2px var(--c1);transform:rotate(var(--a)) translateX(92px);animation:rkTw 1.1s ease-in-out infinite alternate}
+.rank-orbit i:nth-child(odd){animation-delay:.5s}
+[data-r="7"] .rank-orbit i{background:hsl(var(--a),100%,65%);box-shadow:0 0 8px 2px hsl(var(--a),100%,60%)}
+@keyframes rkTw{from{opacity:.3}to{opacity:1}}
+.rank-frame{position:relative;z-index:2;display:inline-flex;padding:3px;border-radius:14px;overflow:hidden;isolation:isolate;box-shadow:0 0 calc(var(--g)*3px) var(--c1);animation:rkGlow 1.8s ease-in-out infinite alternate}
+.rank-frame::before{content:"";position:absolute;inset:-60%;z-index:-1;background:conic-gradient(var(--c1),var(--c2),var(--c1),var(--c2),var(--c1));animation:rkSpin var(--spd) linear infinite}
+.rank-frame.admin::before{background:conic-gradient(#ff3b3b,#ffd23b,#3bff6a,#3bd1ff,#a23bff,#ff3b3b)}
+.rank-badge{position:relative;overflow:hidden;display:flex;align-items:center;gap:8px;background:linear-gradient(180deg,#1c1c28,#0d0d14);border-radius:11px;padding:9px 16px;font-weight:900;letter-spacing:1.5px;font-size:1.05rem}
+.rank-badge::after{content:"";position:absolute;top:0;bottom:0;left:-50%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-20deg);animation:rkShine 3s ease-in-out infinite}
+.rk-ico{display:inline-block;filter:drop-shadow(0 0 6px var(--c1));animation:rkBob 1.6s ease-in-out infinite}
+.rk-name{background:linear-gradient(100deg,var(--c1) 30%,#fff 50%,var(--c1) 70%) 0 0/250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 5px var(--c1));animation:rkTxt 2.4s linear infinite}
+.rank-frame.admin .rk-name{background:linear-gradient(90deg,#ff3b3b,#ffd23b,#3bff6a,#3bd1ff,#a23bff,#ff3b3b) 0 0/200% 100%;-webkit-background-clip:text;background-clip:text;animation:rkTxt2 2s linear infinite}
+[data-r="6"] .rank-badge{animation:rkFlick 3s steps(1) infinite}
+@keyframes rkSpin{to{transform:rotate(360deg)}}
+@keyframes rkGlow{from{box-shadow:0 0 calc(var(--g)*2px) var(--c1)}to{box-shadow:0 0 calc(var(--g)*6px) var(--c1)}}
+@keyframes rkShine{0%,60%{left:-50%}100%{left:130%}}
+@keyframes rkBob{50%{transform:translateY(-3px) scale(1.12)}}
+@keyframes rkTxt{from{background-position:100% 0}to{background-position:0 0}}
+@keyframes rkTxt2{to{background-position:200% 0}}
+@keyframes rkFlick{0%,90%,95%{filter:none}92%,97%{filter:brightness(2.2)}}
+/* animasi perubahan rank */
+.rank-ring{position:absolute;left:50%;top:50%;width:20px;height:20px;margin:-10px;border:3px solid var(--c1);border-radius:50%;opacity:0}
+.rk-up .rank-ring,.rk-same .rank-ring{animation:rkRing .9s ease-out}
+.rk-down .rank-ring{border-color:#ff4757;animation:rkRing .9s ease-out .15s}
+@keyframes rkRing{0%{opacity:1;transform:scale(.5)}100%{opacity:0;transform:scale(14)}}
+.rk-up .rank-frame{animation:rkGlow 1.8s ease-in-out infinite alternate,rkUp 1.1s cubic-bezier(.2,1.5,.4,1)}
+.rk-down .rank-frame{animation:rkGlow 1.8s ease-in-out infinite alternate,rkDown 1s ease-out}
+.rk-same .rank-frame{animation:rkGlow 1.8s ease-in-out infinite alternate,rkPop .6s ease-out}
+@keyframes rkUp{0%{transform:perspective(400px) rotateX(90deg) translateY(50px) scale(.3);opacity:0}60%{transform:perspective(400px) rotateX(-12deg) scale(1.2);opacity:1}100%{transform:none}}
+@keyframes rkDown{0%{transform:translateY(-60px) scale(1.5) rotate(-6deg);opacity:0;filter:brightness(2)}35%{transform:translateY(8px) rotate(3deg);opacity:1}50%{transform:translateX(-8px)}65%{transform:translateX(8px)}80%{transform:translateX(-4px)}100%{transform:none;filter:none}}
+@keyframes rkPop{0%{transform:scale(.8)}100%{transform:scale(1)}}
+.rk-up::before{content:"";position:absolute;left:50%;bottom:0;width:70px;height:100%;margin-left:-35px;transform-origin:bottom;background:linear-gradient(to top,var(--c1),transparent);opacity:0;animation:rkBeam 1.1s ease-out}
+@keyframes rkBeam{0%{opacity:0;transform:scaleY(.2)}30%{opacity:.8}100%{opacity:0;transform:scaleY(1.1)}}
+.rk-down::after{content:"";position:absolute;inset:0;background:radial-gradient(circle,rgba(255,71,87,.6),transparent 70%);opacity:0;animation:rkFlash .8s ease-out}
+@keyframes rkFlash{0%{opacity:1}100%{opacity:0}}
+.rank-burst i{position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3px;border-radius:2px;background:var(--c1);opacity:0}
+.rank-burst i:nth-child(even){background:var(--c2)}
+[data-r="7"] .rank-burst i{background:hsl(var(--h),100%,65%)}
+.rk-up .rank-burst i{animation:rkBurst 1.1s ease-out .25s}
+.rk-down .rank-burst i{background:#ff4757;animation:rkBurst 1s ease-in .15s}
+@keyframes rkBurst{0%{opacity:1;transform:translate(0,0) rotate(0) scale(1)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(360deg) scale(.3)}}
+.rank-delta{margin-top:8px;font-weight:bold;font-size:.85rem;min-height:1.2em;color:#a0a0c0}
+.rank-delta.up{color:#2ed573;animation:rkFloat 1s ease-out}.rank-delta.down{color:#ff4757;animation:rkFloat 1s ease-out}
+@keyframes rkFloat{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.rank-wrap *,.rank-wrap::before,.rank-wrap::after{animation:none!important}}
+.res-rank{margin-bottom:16px}.rank-none{color:#a0a0c0;font-size:.85rem;padding:12px 0}
+.rank-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px;text-align:center}
+.rank-pair>div{background:#2a2a40;border-radius:12px;padding:12px 6px}
+.secret-box{margin-bottom:16px;padding:12px;border-radius:12px;background:#14141c;border:2px solid #ffd23b;font-size:.85rem;line-height:1.5;animation:hueSpin 4s linear infinite}
+/* Paket secret: Prisma Admin */
+[data-fx=secret] .note{background:conic-gradient(#ff3b3b,#ffd23b,#3bff6a,#3bd1ff,#a23bff,#ff3b3b);border:2px solid #fff;box-shadow:0 0 14px #fff,0 0 22px var(--c);animation:prismSpin 1.2s linear infinite}
+[data-fx=secret] .note::before{background:linear-gradient(to top,#fff,var(--c),transparent);opacity:.7;filter:blur(2px)}
+[data-fx=secret] .note.near{animation:prismNear .6s linear infinite}
+[data-fx=secret] .note.missed{animation:noteMiss .25s ease-in forwards}
+@keyframes prismSpin{from{filter:hue-rotate(0)}to{filter:hue-rotate(360deg)}}
+@keyframes prismNear{from{filter:hue-rotate(0) brightness(1.4) drop-shadow(0 0 10px #fff)}to{filter:hue-rotate(360deg) brightness(1.4) drop-shadow(0 0 10px #fff)}}
+.hx-wave{position:absolute;left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle,transparent 52%,#fff 56%,var(--c) 66%,transparent 72%);animation:hxWave .55s ease-out forwards}
+.hx-star{position:absolute;left:-5px;top:-5px;width:10px;height:10px;background:hsl(var(--h,0),100%,70%);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);animation:hxStar .6s ease-out forwards}
+@keyframes hxWave{from{transform:scale(.2);opacity:1}to{transform:scale(2.6);opacity:0}}
+@keyframes hxStar{to{transform:translate(var(--dx),var(--dy)) rotate(270deg) scale(.3);opacity:0}}
+[data-zone=secret] .target-zone,[data-zone=secret] .pv-zone{outline:2px solid #ff3b3b;outline-offset:3px;overflow:hidden;animation:zoneRgb 3s linear infinite}
+[data-zone=secret] .target-zone::before,[data-zone=secret] .pv-zone::before{content:"";position:absolute;top:0;bottom:0;left:-40%;width:40%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);animation:zoneScan 1.4s ease-in-out infinite}
+@keyframes zoneRgb{0%{outline-color:#ff3b3b}20%{outline-color:#ffd23b}40%{outline-color:#3bff6a}60%{outline-color:#3bd1ff}80%{outline-color:#a23bff}100%{outline-color:#ff3b3b}}
+@keyframes zoneScan{to{left:110%}}
+.hp-container[data-hp=secret]{height:12px;border:1px solid rgba(255,255,255,.4);box-shadow:0 0 10px rgba(162,59,255,.6)}
+[data-hp=secret] .hp-fill{background:linear-gradient(90deg,#ff3b3b,#ffd23b,#3bff6a,#3bd1ff,#a23bff,#ff3b3b) 0 0/200% 100%;animation:hpFlow 2s linear infinite;position:relative}
+[data-hp=secret] .hp-fill::after,[data-bar=secret] .sb-fill::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(100deg,transparent 0 10px,rgba(255,255,255,.38) 10px 14px) 0 0/28px 100%;animation:hpGlint 1s linear infinite}
+@keyframes hpFlow{to{background-position:200% 0}}@keyframes hpGlint{to{background-position:28px 0}}
+[data-bar=secret] .sb-track{border-color:rgba(255,255,255,.6);border-radius:11px;background:#0e0e14}
+[data-bar=secret] .sb-fill{background:linear-gradient(90deg,#ff3b3b,#ffd23b,#3bff6a,#3bd1ff,#a23bff,#ff3b3b) 0 0/320px 100%;box-shadow:0 0 14px rgba(255,255,255,.5);animation:sbNeb 3s linear infinite}
+.pv-anim[data-bar=secret] .sb-fill{animation:sbNeb 3s linear infinite,pvFill 4s linear infinite}
+[data-bar=secret] .sb-head{--p:#fff;filter:drop-shadow(0 0 5px #fff)}
+[data-bar=secret] .sb-head::after{content:"";position:absolute;left:-8px;top:-8px;width:16px;height:16px;background:#fff;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);animation:sbSpin 1.5s linear infinite}
+
+/* ===== Border game ===== */
+.bfx{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none}
+.bfx>*{position:absolute;pointer-events:none}
+.pv.pvb{position:relative}.bar-item .pv.pvb{height:150px}
+.pvb-lbl{position:absolute;left:8px;bottom:8px;z-index:6;font-size:.7rem;font-weight:bold;color:#fff;text-shadow:0 0 6px #000}
+.bfx-ring{inset:0;z-index:5;border:3px solid transparent;border-radius:inherit}
+/* Badai Petir (kuning / biru / merah mengikuti combo) */
+[data-bd=storm]{--lc:#ffd23b;--lcrgb:255,210,59;--rs:1}
+[data-bd=storm][data-tier=b]{--lc:#3bb0ff;--lcrgb:59,176,255;--rs:.75}
+[data-bd=storm][data-tier=r]{--lc:#ff3b3b;--lcrgb:255,59,59;--rs:.55}
+[data-bd=storm] .bfx-ring{border-color:var(--lc);box-shadow:inset 0 0 24px rgba(var(--lcrgb),.55),0 0 14px var(--lc);animation:stRing 1.6s steps(1) infinite}
+@keyframes stRing{0%,100%{opacity:1}30%{opacity:.7}34%{opacity:1}70%{opacity:.85}}
+.tier-pop[data-bd=storm] .bfx-ring{animation:ringPop .6s ease-out}
+@keyframes ringPop{0%{filter:brightness(3);box-shadow:inset 0 0 60px var(--lc),0 0 34px var(--lc)}100%{filter:none}}
+.st-rain{inset:0}
+.st-r{position:absolute;top:-90px;left:var(--x);width:2px;height:var(--l);background:linear-gradient(rgba(var(--lcrgb),0),rgba(var(--lcrgb),.85));opacity:.7;transform:rotate(12deg);animation-name:stRain;animation-timing-function:linear;animation-iteration-count:infinite;animation-duration:calc(var(--d)*var(--rs)*1s);animation-delay:calc(var(--dl)*-1s)}
+@keyframes stRain{to{transform:translate(-70px,560px) rotate(12deg)}}
+[data-bd=storm][data-tier=y] .st-r:nth-child(n+13){display:none}
+[data-bd=storm][data-tier=b] .st-r:nth-child(n+25){display:none}
+.st-bolt{top:0;left:var(--x);width:80px;height:100%;opacity:0;background:linear-gradient(#fff,var(--lc));clip-path:polygon(55% 0,42% 20%,58% 22%,38% 46%,57% 48%,40% 72%,54% 74%,45% 100%,49% 100%,62% 76%,48% 74%,64% 50%,45% 48%,62% 24%,47% 22%,60% 0);animation:stBolt calc(var(--d)*var(--rs)*1s) steps(1) infinite;animation-delay:calc(var(--dl)*-1s)}
+@keyframes stBolt{0%,100%{opacity:0}2%{opacity:1}4%{opacity:0}6%{opacity:.9}9%{opacity:0}}
+[data-bd=storm][data-tier=y] .st-bolt:nth-of-type(n+2){display:none}
+[data-bd=storm][data-tier=b] .st-bolt:nth-of-type(n+3){display:none}
+.st-flash{inset:0;opacity:0;background:radial-gradient(circle at 50% 25%,rgba(var(--lcrgb),.55),transparent 72%);animation:stFlash calc(3.2s*var(--rs)) steps(1) infinite}
+@keyframes stFlash{0%,100%{opacity:0}1%{opacity:.9}3%{opacity:0}5%{opacity:.6}8%{opacity:0}}
+/* Galaksi Epik */
+[data-bd=galaxy] .bfx-ring{background:conic-gradient(#a855f7,#22d3ee,#ec4899,#facc15,#a855f7) border-box;-webkit-mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) padding-box,linear-gradient(#000 0 0);mask-composite:exclude;animation:gxRing 6s linear infinite}
+@keyframes gxRing{from{filter:drop-shadow(0 0 5px #a855f7) hue-rotate(0)}to{filter:drop-shadow(0 0 5px #a855f7) hue-rotate(360deg)}}
+.gx-neb{inset:0;background:radial-gradient(ellipse at 0 0,rgba(168,85,247,.5),transparent 55%),radial-gradient(ellipse at 100% 100%,rgba(34,211,238,.45),transparent 55%),radial-gradient(ellipse at 100% 0,rgba(236,72,153,.35),transparent 50%),radial-gradient(ellipse at 0 100%,rgba(250,204,21,.18),transparent 45%);animation:hueSpin 18s linear infinite}
+.gx-st{inset:0}
+.gx-s1{background:radial-gradient(circle,#fff 0 1px,transparent 1.6px) 0 0/47px 53px;animation:gxF1 6s linear infinite,sbTw 1.8s ease-in-out infinite alternate}
+.gx-s2{background:radial-gradient(circle,#cfe8ff 0 .8px,transparent 1.4px) 17px 11px/31px 37px;animation:gxF2 9s linear infinite,sbTw 1.2s ease-in-out .4s infinite alternate}
+.gx-s3{background:radial-gradient(circle,#ffd6f5 0 1.3px,rgba(255,255,255,.4) 2px,transparent 3px) 8px 20px/71px 83px;animation:gxF3 4s linear infinite,sbTw .9s ease-in-out infinite alternate-reverse}
+@keyframes gxF1{to{background-position:0 53px}}@keyframes gxF2{to{background-position:17px 48px}}@keyframes gxF3{to{background-position:8px 103px}}
+.gx-mt{left:var(--x);top:-12%;width:2px;height:80px;background:linear-gradient(transparent,hsl(var(--h),100%,88%));box-shadow:0 0 8px 1px hsl(var(--h),100%,70%);opacity:0;transform:rotate(25deg);animation-name:gxMt;animation-timing-function:linear;animation-iteration-count:infinite;animation-duration:calc(var(--d)*3s);animation-delay:calc(var(--dl)*-1s)}
+@keyframes gxMt{0%{opacity:0;transform:rotate(25deg) translateY(-140px)}4%{opacity:1}34%{opacity:0;transform:rotate(25deg) translateY(640px)}100%{opacity:0;transform:rotate(25deg) translateY(640px)}}
+.gx-planet{border-radius:50%;animation:gxFloat 8s ease-in-out infinite alternate}
+@keyframes gxFloat{to{transform:translate(-8px,10px) rotate(8deg)}}
+.gx-p1{right:-6px;top:10px;width:56px;height:56px;background:repeating-linear-gradient(0deg,#e9b872 0 5px,#c98a4b 5px 9px,#f0cf9a 9px 12px);box-shadow:0 0 18px rgba(255,190,90,.5)}
+.gx-p1::before{content:"";position:absolute;left:-22px;top:19px;width:100px;height:20px;border:3px solid rgba(255,230,170,.8);border-radius:50%;transform:rotate(-20deg);box-shadow:0 0 8px rgba(255,200,120,.5)}
+.gx-p1::after,.gx-p2::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 30% 30%,transparent 35%,rgba(0,0,40,.75) 88%)}
+.gx-p2{left:-12px;bottom:84px;width:50px;height:50px;overflow:hidden;background:radial-gradient(circle at 30% 30%,#9be7ff,#2a7de1 50%,#0b2a6b 95%);box-shadow:0 0 16px rgba(80,170,255,.6)}
+.gx-p2::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 25% 40%,#3ddc84 0 16%,transparent 17%),radial-gradient(circle at 70% 65%,#3ddc84 0 12%,transparent 13%),radial-gradient(circle at 50% 18%,#eaffff 0 8%,transparent 9%);background-size:50px 100%;animation:gxLand 9s linear infinite}
+@keyframes gxLand{to{background-position:50px 0}}
+.gx-p3{right:22px;bottom:150px;width:20px;height:20px;background:radial-gradient(circle at 30% 30%,#ffe0e8,#d6336c 55%,#4a0d2a);box-shadow:0 0 10px rgba(214,51,108,.6);animation-duration:5s}
+.gx-rocket{left:-8%;bottom:-6%;font-size:24px;line-height:1;opacity:0;filter:drop-shadow(0 0 6px #ff9a3b);animation:gxRocket 8s linear infinite 1s}
+.gx-rocket::before{content:"";position:absolute;right:62%;top:58%;width:90px;height:7px;margin-top:-3px;transform-origin:100% 50%;transform:rotate(-45deg);background:linear-gradient(90deg,transparent,#ffb347 60%,#fff3b0);border-radius:4px;filter:blur(1px);z-index:-1}
+@keyframes gxRocket{0%{transform:translate(0,0);opacity:0}3%{opacity:1}40%{transform:translate(460px,-480px);opacity:1}43%,100%{transform:translate(460px,-480px);opacity:0}}
+/* ===== Pembukaan rank (sinematik) ===== */
+#rankReveal{position:fixed;inset:0;z-index:2000;display:none;background:#000;cursor:pointer;opacity:0}
+#rankReveal.show{display:block;animation:rvIn .35s forwards}
+#rankReveal.show.out{animation:rvOut .45s forwards}
+@keyframes rvIn{to{opacity:1}}@keyframes rvOut{from{opacity:1}to{opacity:0}}
+.rv{position:absolute;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,#12121f,#000 70%);--c1:#fff;--c2:#aaa}
+.rv.down{background:radial-gradient(circle,#2a0509,#000 70%)}
+.rv>*{pointer-events:none}
+.rv-rays{position:absolute;left:50%;top:50%;width:140vmax;height:140vmax;margin:-70vmax;background:repeating-conic-gradient(var(--c1) 0 4deg,transparent 4deg 10deg);-webkit-mask-image:radial-gradient(circle,#000 0,transparent 42%);mask-image:radial-gradient(circle,#000 0,transparent 42%);opacity:0;animation:rvRays 5s ease-out 1s forwards}
+.rv[data-r="7"] .rv-rays{background:repeating-conic-gradient(#ff3b3b 0 4deg,#ffd23b 4deg 8deg,#3bff6a 8deg 12deg,#3bd1ff 12deg 16deg,#a23bff 16deg 20deg)}
+.rv.down .rv-rays{display:none}
+@keyframes rvRays{0%{opacity:0;transform:scale(.2) rotate(0)}8%{opacity:.85}100%{opacity:.35;transform:scale(1.4) rotate(140deg)}}
+.rv-core{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;border-radius:50%;background:#fff;box-shadow:0 0 30px 10px var(--c1);opacity:0;animation:rvCharge 1s ease-in forwards,rvCoreOut .3s ease-out 1s forwards}
+.rv.down .rv-core{box-shadow:0 0 30px 10px #ff4757}
+@keyframes rvCharge{0%{opacity:0;transform:scale(0)}60%{opacity:1;transform:scale(2)}100%{opacity:1;transform:scale(7)}}
+@keyframes rvCoreOut{to{opacity:0;transform:scale(30)}}
+.rv-ring{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px;border:4px solid var(--c1);border-radius:50%;opacity:0;animation:rvRing 1.4s ease-out 1s}
+.rv-ring.r2{border-color:var(--c2);animation-delay:1.15s}.rv-ring.r3{border-color:#fff;animation-delay:1.3s}
+.rv.down .rv-ring{border-color:#ff4757}
+@keyframes rvRing{0%{opacity:1;transform:scale(.3)}100%{opacity:0;transform:scale(28)}}
+.rv-flash{position:absolute;inset:0;background:#fff;opacity:0;animation:rvFlash .9s ease-out 1s}
+.rv.down .rv-flash{background:#ff4757}
+@keyframes rvFlash{0%{opacity:1}100%{opacity:0}}
+.rv-stage{position:relative;text-align:center;color:#fff;animation:rvShake .7s linear 1s}
+[data-r="6"] .rv-stage,[data-r="7"] .rv-stage{animation-duration:1.2s}
+@keyframes rvShake{0%,100%{transform:none}10%{transform:translate(-9px,5px)}20%{transform:translate(8px,-6px)}30%{transform:translate(-7px,-4px)}40%{transform:translate(6px,6px)}55%{transform:translate(-4px,3px)}70%{transform:translate(3px,-2px)}85%{transform:translate(-2px,1px)}}
+.rv-top{font-size:.95rem;font-weight:800;letter-spacing:6px;color:var(--c1);opacity:0;animation:rvTop 1s ease-out 1.2s forwards}
+.rv.down .rv-top{color:#ff4757}
+@keyframes rvTop{from{opacity:0;letter-spacing:30px}to{opacity:1;letter-spacing:6px}}
+.rv-ico{font-size:4.2rem;line-height:1.2;filter:drop-shadow(0 0 18px var(--c1));animation:rvIco 1s cubic-bezier(.2,1.7,.4,1) 1s both}
+@keyframes rvIco{from{transform:scale(0) rotate(-540deg);opacity:0}to{transform:none;opacity:1}}
+.rv-name{font-size:2.6rem;font-weight:900;letter-spacing:4px;filter:drop-shadow(0 0 14px var(--c1))}
+.rv-name span{display:inline-block;opacity:0;background:linear-gradient(180deg,#fff,var(--c1));-webkit-background-clip:text;background-clip:text;color:transparent;animation:rvLetter .55s cubic-bezier(.2,1.6,.4,1) calc(1.25s + var(--k)*.09s) forwards}
+.rv.down .rv-name span{background:linear-gradient(180deg,#fff,#ff4757);-webkit-background-clip:text;background-clip:text;animation-name:rvLetterDown}
+@keyframes rvLetter{from{opacity:0;transform:scale(5) translateY(-30px);filter:blur(14px)}to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes rvLetterDown{from{opacity:0;transform:translateY(-140px) scale(1.7);filter:blur(8px)}60%{transform:translateY(8px)}to{opacity:1;transform:none;filter:blur(0)}}
+.rv[data-r="7"] .rv-name span{background:linear-gradient(90deg,#ff3b3b,#ffd23b,#3bff6a,#3bd1ff,#a23bff,#ff3b3b) 0 0/300% 100%;-webkit-background-clip:text;background-clip:text;animation:rvLetter .55s cubic-bezier(.2,1.6,.4,1) calc(1.25s + var(--k)*.09s) forwards,rvRb 2s linear 1.8s infinite}
+@keyframes rvRb{to{background-position:300% 0}}
+.rv[data-r="7"] .rv-name{animation:rvGlitch 2.4s steps(1) 2.6s infinite}
+@keyframes rvGlitch{0%,88%,100%{transform:none}90%{transform:translate(-5px,2px) skewX(10deg)}94%{transform:translate(5px,-2px) skewX(-10deg)}}
+.rv-sub{margin-top:14px;font-size:1.05rem;font-weight:bold;color:#2ed573;opacity:0;animation:rvUp .6s ease-out 2.3s forwards}
+.rv.down .rv-sub{color:#ff4757}.rv.same .rv-sub{color:#a0a0c0}
+.rv-pct{margin-top:6px;font-size:.9rem;color:#a0a0c0;opacity:0;animation:rvUp .6s ease-out 2.6s forwards}
+.rv-skip{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:.75rem;color:#777;opacity:0;animation:rvUp .6s ease-out 3s forwards}
+@keyframes rvUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.rv-parts i{position:absolute;left:50%;top:50%;width:var(--s);height:var(--s);margin:-4px;border-radius:2px;background:var(--pc);box-shadow:0 0 8px var(--pc);opacity:0;animation:rvPart var(--t) cubic-bezier(.1,.7,.3,1) 1s forwards}
+@keyframes rvPart{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--r))}}
+.rv-conf i{position:absolute;top:-24px;left:var(--x);width:9px;height:14px;background:var(--pc);opacity:0;animation:rvConf var(--t) linear var(--dl) forwards}
+@keyframes rvConf{0%{opacity:1;transform:translate(0,0) rotate(0)}100%{opacity:.9;transform:translate(var(--sw),110vh) rotate(var(--r))}}
+.rv-bolt{position:absolute;top:0;left:var(--x);width:120px;height:100%;margin-left:-60px;display:none;background:linear-gradient(#fff,var(--c1));clip-path:polygon(55% 0,42% 20%,58% 22%,38% 46%,57% 48%,40% 72%,54% 74%,45% 100%,49% 100%,62% 76%,48% 74%,64% 50%,45% 48%,62% 24%,47% 22%,60% 0);opacity:0;animation:rvBolt .6s steps(1) var(--dl)}
+.rv[data-r="6"] .rv-bolt,.rv[data-r="7"] .rv-bolt{display:block}
+@keyframes rvBolt{0%{opacity:0}10%{opacity:1}25%{opacity:0}40%{opacity:1}55%{opacity:0}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.bfx *,.bfx-ring,#rankReveal *{animation:none!important}}
+
+/* === Hitungan mundur 3-2-1 === */
+.countdown{position:fixed;inset:0;display:flex;justify-content:center;align-items:center;z-index:900;pointer-events:none;opacity:0;background:rgba(5,5,12,.5);font-size:clamp(7rem,32vw,15rem);font-weight:900;line-height:1;color:#fff;text-shadow:0 0 26px #00e5ff,0 0 70px rgba(0,229,255,.75),0 8px 0 rgba(0,0,0,.45);-webkit-user-select:none;user-select:none}
+.countdown.show{opacity:1}
+.countdown span{display:block;animation:cdPop 1s ease-out forwards}
+@keyframes cdPop{0%{transform:scale(2.4);opacity:0}16%{transform:scale(1);opacity:1}72%{transform:scale(.94);opacity:1}100%{transform:scale(.5);opacity:0}}
+
+/* === Bar Hit: Lubang Hitam Galaksi (100 SP) === */
+[data-zone=blackhole] .target-zone,[data-zone=blackhole] .pv-zone{border:2px solid #b794ff;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 115%,#6d28d9 0,#1b0c42 52%,#070411 100%);
+  box-shadow:0 0 12px rgba(150,90,255,.75),0 0 26px rgba(50,120,255,.35),inset 0 0 14px rgba(170,110,255,.5);
+  animation:bhGlow 2.4s ease-in-out infinite alternate}
+@keyframes bhGlow{from{filter:brightness(1) saturate(1)}to{filter:brightness(1.3) saturate(1.35)}}
+[data-zone=blackhole] .target-zone .icon,[data-zone=blackhole] .target-zone .sub{position:relative;z-index:2}
+[data-zone=blackhole] .target-zone .icon{font-size:1.45rem;color:#fff;text-shadow:0 0 6px #d8b4ff,0 0 14px #8b3dff}
+[data-zone=blackhole] .target-zone .sub{color:#d8c4ff}
+/* galaksi berputar: bintang + lengan spiral nebula */
+[data-zone=blackhole] .target-zone::before,[data-zone=blackhole] .pv-zone::before{content:"";position:absolute;left:-70%;right:-70%;top:-70%;bottom:-70%;pointer-events:none;
+  background:
+    radial-gradient(1.6px 1.6px at 46% 40%,#fff 60%,transparent),
+    radial-gradient(1.2px 1.2px at 58% 36%,#fff 60%,transparent),
+    radial-gradient(1.4px 1.4px at 36% 52%,#cfe8ff 60%,transparent),
+    radial-gradient(1.2px 1.2px at 63% 58%,#ffd9f5 60%,transparent),
+    radial-gradient(1px 1px at 50% 63%,#fff 60%,transparent),
+    radial-gradient(1px 1px at 41% 33%,#fff 60%,transparent),
+    radial-gradient(1.4px 1.4px at 67% 45%,#fff 60%,transparent),
+    radial-gradient(1px 1px at 33% 44%,#fff 60%,transparent),
+    conic-gradient(from 0deg at 50% 50%,rgba(255,70,200,0) 0deg,rgba(255,70,200,.55) 60deg,rgba(255,70,200,0) 120deg,rgba(40,170,255,0) 180deg,rgba(40,170,255,.55) 240deg,rgba(40,170,255,0) 300deg,rgba(255,70,200,0) 360deg);
+  animation:bhSpin 12s linear infinite}
+@keyframes bhSpin{to{transform:rotate(360deg)}}
+/* lubang hitam + cakram akresi: terbuka saat ditekan / saat menyedot bit */
+[data-zone=blackhole] .target-zone::after,[data-zone=blackhole] .pv-zone::after{content:"";position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px 0 0 -31px;border-radius:50%;pointer-events:none;
+  background:
+    radial-gradient(circle,#000 0 27%,rgba(0,0,0,0) 28%),
+    radial-gradient(circle,rgba(0,0,0,0) 0 28%,rgba(255,255,255,.9) 31%,rgba(255,255,255,0) 44%),
+    conic-gradient(#fff,#ffcf6b,#ff4fd8,#7b2cff,#25c9ff,#fff,#ffcf6b,#ff4fd8,#7b2cff,#25c9ff,#fff);
+  -webkit-mask-image:radial-gradient(circle,#000 58%,transparent 70%);mask-image:radial-gradient(circle,#000 58%,transparent 70%);
+  scale:0;opacity:0;transition:scale .22s cubic-bezier(.2,1.4,.4,1),opacity .2s;
+  animation:bhCore .7s linear infinite}
+[data-zone=blackhole] .pv-zone::after{width:28px;height:28px;margin:-14px 0 0 -14px}
+@keyframes bhCore{to{rotate:360deg}}
+[data-zone=blackhole] .target-zone.active::after,[data-zone=blackhole] .target-zone.bh-feed::after,[data-zone=blackhole] .pv-zone.bh-feed::after{scale:1;opacity:1}
+[data-zone=blackhole] .target-zone.active,[data-zone=blackhole] .target-zone.bh-feed,[data-zone=blackhole] .pv-zone.bh-feed{border-color:#fff;box-shadow:0 0 18px #d8b4ff,0 0 40px #7c3aed,inset 0 0 18px rgba(255,255,255,.35)}
+[data-zone=blackhole] .target-zone.hit-perfect{border-color:#fff;box-shadow:0 0 24px #fff,0 0 52px #b36bff,inset 0 0 24px rgba(255,255,255,.7)}
+[data-zone=blackhole] .target-zone.hit-good{border-color:#ff9ad8;box-shadow:0 0 22px #ff4fd8,0 0 44px #7c3aed,inset 0 0 18px rgba(255,120,220,.55)}
+/* bit tersedot: berputar, memanjang, memerah-biru, lalu lenyap di pusat */
+[data-zone=blackhole] .note.absorbed{animation:bhSuck .46s cubic-bezier(.5,0,.9,.4) forwards;pointer-events:none}
+[data-zone=blackhole] .note.absorbed::before{opacity:0}
+@keyframes bhSuck{
+  0%{transform:translate(0,0) scale(1,1) rotate(0);opacity:1;filter:brightness(1.5)}
+  30%{transform:translate(12px,calc(var(--dy,0px)*.3)) scale(.9,1.12) rotate(170deg);filter:brightness(1.8) hue-rotate(40deg)}
+  60%{transform:translate(-10px,calc(var(--dy,0px)*.72)) scale(.55,.8) rotate(430deg);filter:brightness(2) hue-rotate(110deg)}
+  85%{transform:translate(3px,calc(var(--dy,0px)*.96)) scale(.2,.4) rotate(650deg);opacity:.9;filter:brightness(2.4) hue-rotate(200deg)}
+  100%{transform:translate(0,var(--dy,0px)) scale(0) rotate(800deg);opacity:0;filter:brightness(3) hue-rotate(280deg)}}
+/* efek hit: runtuh ke dalam, bukan meledak keluar */
+.bh-fx .fx-ring{left:-34px;top:-34px;width:68px;height:68px;border:3px solid #e9d5ff;border-radius:50%;background:none;box-shadow:0 0 12px #a855f7,inset 0 0 10px #7c3aed;animation:bhRingIn .46s cubic-bezier(.4,0,.9,.5) forwards}
+.bh-fx .fx-spark{left:-3px;top:-3px;width:6px;height:6px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c);animation:bhSparkIn .44s cubic-bezier(.5,0,.9,.5) forwards}
+.bh-ring2{position:absolute;left:-34px;top:-34px;width:68px;height:68px;border-radius:50%;border:2px solid #67e8f9;box-shadow:0 0 10px #22d3ee;opacity:0;animation:bhRingIn .46s cubic-bezier(.4,0,.9,.5) .1s forwards}
+.bh-flash{position:absolute;left:-30px;top:-30px;width:60px;height:60px;border-radius:50%;background:radial-gradient(circle,#fff 0,#e9b8ff 28%,#8b3dff 55%,transparent 72%);opacity:0;animation:bhFlash .3s ease-out .28s forwards}
+@keyframes bhRingIn{0%{transform:scale(1.9);opacity:0}25%{opacity:1}100%{transform:scale(.15);opacity:0}}
+@keyframes bhSparkIn{0%{transform:translate(var(--dx),var(--dy)) scale(1);opacity:0}20%{opacity:1}100%{transform:translate(0,0) scale(.1);opacity:0}}
+@keyframes bhFlash{0%{transform:scale(.2);opacity:1}100%{transform:scale(1.8);opacity:0}}
+/* pratinjau Shop: bar lebar & pipih, jadi bintang disebar statis dan pusaran dibuat bulat */
+[data-zone=blackhole] .pv-zone{background:
+  radial-gradient(1.5px 1.5px at 8% 30%,#fff 60%,transparent),
+  radial-gradient(1px 1px at 17% 70%,#cfe8ff 60%,transparent),
+  radial-gradient(1.5px 1.5px at 26% 40%,#fff 60%,transparent),
+  radial-gradient(1px 1px at 35% 75%,#fff 60%,transparent),
+  radial-gradient(1.2px 1.2px at 44% 25%,#ffd9f5 60%,transparent),
+  radial-gradient(1px 1px at 58% 70%,#fff 60%,transparent),
+  radial-gradient(1.5px 1.5px at 66% 35%,#fff 60%,transparent),
+  radial-gradient(1px 1px at 74% 72%,#cfe8ff 60%,transparent),
+  radial-gradient(1.2px 1.2px at 83% 28%,#fff 60%,transparent),
+  radial-gradient(1px 1px at 92% 60%,#ffd9f5 60%,transparent),
+  radial-gradient(ellipse at 18% 50%,rgba(255,70,200,.4),transparent 55%),
+  radial-gradient(ellipse at 82% 50%,rgba(40,170,255,.4),transparent 55%),
+  radial-gradient(ellipse at 50% 115%,#6d28d9 0,#1b0c42 52%,#070411 100%)}
+[data-zone=blackhole] .pv-zone::before{left:50%;right:auto;top:50%;bottom:auto;width:240px;height:240px;margin:-120px 0 0 -120px;opacity:.7;animation-duration:20s}
+@media (prefers-reduced-motion:reduce){[data-zone=blackhole] .note.absorbed{animation:none;opacity:0}[data-zone=blackhole] .target-zone::before,[data-zone=blackhole] .pv-zone::before,[data-zone=blackhole] .target-zone::after,[data-zone=blackhole] .pv-zone::after{animation:none}}
+</style>
+</head>
+<body>
+
+<img id="bgImg" class="bg-img" alt="" />
+
+<!-- Menu utama -->
+<div id="mainMenu" class="menu-overlay">
+  <div class="menu-card">
+    <h1 class="menu-title">RHYTHM BEAT</h1>
+    <p class="menu-subtitle">Auto-Detect Bass Edition</p>
+    <div class="menu-buttons">
+      <button id="btnPlay" class="menu-btn primary">PLAY GAME</button>
+      <button id="btnHowToPlay" class="menu-btn">CARA MAIN</button>
+      <button id="btnShop" class="menu-btn">🛒 SHOP</button>
+      <button id="btnAbout" class="menu-btn">👤 ABOUT ME</button>
+      <button id="btnBg" class="menu-btn">🖼 WALLPAPER</button>
+      <button id="btnErase" class="menu-btn danger">🗑 HAPUS DATA</button>
+    </div>
+    <p id="bgStatus" class="bg-status">Wallpaper mendukung JPG, PNG, dan GIF animasi (bisa simpan beberapa).</p>
+    <p id="saveStatus" class="bg-status">Auto-save aktif</p>
+    <input type="file" id="bgInput" accept="image/*" hidden />
+  </div>
+</div>
+
+<!-- Wallpaper -->
+<div id="wpModal" class="modal hidden">
+  <div class="modal-content shop-card">
+    <h2>Wallpaper</h2>
+    <div id="wpGrid" class="wp-grid"></div>
+    <p id="wpStatus" class="bg-status"></p>
+    <div class="wp-actions">
+      <button id="btnWpAdd" class="menu-btn primary">+ TAMBAH (JPG / PNG / GIF)</button>
+      <button id="btnWpNone" class="menu-btn">PAKAI BACKGROUND BAWAAN</button>
+      <button id="btnWpClose" class="menu-btn">TUTUP</button>
+    </div>
+  </div>
+</div>
+
+<!-- About me -->
+<div id="aboutModal" class="modal hidden">
+  <div class="modal-content shop-card">
+    <h2>About Me</h2>
+    <p id="aboutHello" class="about-hello">Halo, User!</p>
+    <p class="bg-status" style="text-align:left;margin:0">Nama kamu (muncul di ucapan selamat):</p>
+    <div class="about-name">
+      <input id="nameInput" class="erase-input" type="text" maxlength="20" autocomplete="off" placeholder="User" />
+      <button id="btnSaveName" class="menu-btn primary">SIMPAN</button>
+    </div>
+    <p id="nameStatus" class="bg-status" style="text-align:left;margin:0 0 4px"></p>
+    <h3 class="about-h">Rank</h3>
+    <div class="rank-pair">
+      <div><span class="r-label">Rank sekarang · ketuk ▶</span><div id="rankNow"></div><div id="rankDelta" class="rank-delta"></div></div>
+      <div><span class="r-label">Rank tertinggi</span><div id="rankBest"></div></div>
+    </div>
+    <p id="rankLegend" class="bg-status" style="margin-top:6px;text-align:left"></p>
+    <p id="streakInfo" class="bg-status" style="margin-top:4px;text-align:left"></p>
+    <h3 class="about-h">Kesimpulan</h3>
+    <div class="result-grid">
+      <div><span class="r-label">Combo tertinggi</span><strong id="stCombo">0</strong></div>
+      <div><span class="r-label">Total bit ditekan</span><strong id="stBits">0</strong></div>
+      <div><span class="r-label">Total SP</span><strong id="stSp">0</strong></div>
+      <div><span class="r-label">Total lagu dimainkan</span><strong id="stSongs">0</strong></div>
+      <div class="wide"><span class="r-label">SP yang pernah didapat seluruhnya</span><strong id="stSpAll">0</strong></div>
+    </div>
+    <h3 class="about-h">Hasil Lagu Terakhir</h3>
+    <div id="aboutLast" class="song-info plain"></div>
+    <button id="btnAboutClose" class="menu-btn">TUTUP</button>
+  </div>
+</div>
+
+<div id="rankReveal"></div>
+
+<!-- Hapus data -->
+<div id="eraseModal" class="modal hidden">
+  <div class="modal-content">
+    <h2 style="color:#ff4757">Hapus Semua Data?</h2>
+    <ul>
+      <li>SP, semua item shop, dan item yang sedang dipakai akan dihapus.</li>
+      <li>Semua wallpaper yang tersimpan juga dihapus.</li>
+      <li>Tindakan ini tidak bisa dibatalkan.</li>
+    </ul>
+    <p class="bg-status" style="text-align:left;margin:0">Ketik <b>remove</b> untuk melanjutkan:</p>
+    <input id="eraseInput" class="erase-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="remove" />
+    <div class="wp-actions">
+      <button id="btnEraseGo" class="menu-btn" disabled>HAPUS PERMANEN</button>
+      <button id="btnEraseCancel" class="menu-btn">BATAL</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cara main -->
+<div id="howToPlayModal" class="modal hidden">
+  <div class="modal-content">
+    <h2>Cara Bermain</h2>
+    <ul>
+      <li>1. Upload lagu MP3 favoritmu.</li>
+      <li>2. Tunggu proses scanning bass/beat selesai.</li>
+      <li>3. Tekan <b>A</b> (←), <b>S</b> (↓), <b>K</b> (↑), <b>L</b> (→) saat panah yang turun tepat berada di bar hit.</li>
+      <li>4. Dukungan Controller/Gamepad (L2, L1, R1, R2) dan layar sentuh.</li>
+      <li>5. Tombol <b>P</b> = Pause/Lanjut (menghentikan game dan lagu). Tombol <b>R</b> = Stop Audio, menghentikan semuanya dan melepas lagu agar kamu bisa ganti lagu. Setiap mulai atau lanjut dari pause ada hitungan 3-2-1.</li>
+      <li>6. Tombol Menu (atau Esc) membuka halaman utama kapan saja. Game otomatis di-pause.</li>
+      <li>7. Setiap bit yang berhasil ditekan = 1 SP. Tukar SP di Shop untuk animasi bit atau tampilan bar durasi baru.</li>
+    </ul>
+    <button id="btnCloseModal" class="menu-btn">TUTUP</button>
+  </div>
+</div>
+
+<!-- Shop animasi bit -->
+<div id="shopModal" class="modal hidden">
+  <div class="modal-content shop-card">
+    <h2>Shop</h2>
+    <div class="shop-tabs"><button class="menu-btn shop-tab" data-tab="fx">Animasi Bit</button><button class="menu-btn shop-tab" data-tab="bar">Bar Durasi</button><button class="menu-btn shop-tab" data-tab="hp">Health Bar</button><button class="menu-btn shop-tab" data-tab="hit">Hit Bit</button><button class="menu-btn shop-tab" data-tab="zone">Bar Hit</button><button class="menu-btn shop-tab" data-tab="border">Border</button></div>
+    <p class="shop-sp">SP kamu: <strong id="shopSp">0</strong></p>
+    <div id="shopList" class="shop-list"></div>
+    <p id="shopStatus" class="bg-status"></p>
+    <button id="btnCloseShop" class="menu-btn">TUTUP</button>
+  </div>
+</div>
+
+<!-- Hasil akhir game -->
+<div id="resultModal" class="modal hidden">
+  <div class="modal-content result-card">
+    <h2>Hasil Game</h2>
+    <p id="resGreet" class="greet"></p>
+    <div id="resRank" class="res-rank"></div>
+    <div id="resSecret"></div>
+    <div class="result-grid">
+      <div><span class="r-label">Skor</span><strong id="resScore">0</strong></div>
+      <div><span class="r-label">Combo tertinggi</span><strong id="resCombo">0</strong></div>
+      <div><span class="r-label">Bit berhasil ditekan</span><strong id="resHit">0 / 0</strong></div>
+      <div><span class="r-label">Persentase kemenangan</span><strong id="resAcc">0%</strong></div>
+      <div class="wide"><span class="r-label">SP didapat</span><strong id="resSp">+0</strong></div>
+    </div>
+    <div class="song-info"><h3>🎵 Keterangan Lagu</h3>
+      <p><span>Judul</span><b id="infoTitle">-</b></p>
+      <p><span>Durasi</span><b id="infoDur">0:00</b></p>
+      <p><span>Total bit terdeteksi</span><b id="infoBits">0</b></p>
+      <p><span>Bit tertekan</span><b id="infoHit">0</b></p>
+      <p><span>Perfect / Good / Miss</span><b id="infoJudge">0 / 0 / 0</b></p>
+    </div>
+    <div class="result-actions">
+      <button id="btnRetry" class="menu-btn primary">MAIN LAGI</button>
+      <button id="btnCloseResult" class="menu-btn">TUTUP</button>
+    </div>
+  </div>
+</div>
+
+<div class="game-container">
+  <div class="header">
+    <h1>Rhythm Beat Auto-Detect</h1>
+    <div class="bar-row"><span id="tCur">0:00</span><div class="song-bar" id="songBar" data-bar="neon"><div class="sb-track"><div class="sb-fill" id="sbFill"></div></div><div class="sb-head" id="sbHead"><i></i><i></i><i></i></div></div><span id="tTot">0:00</span></div>
+    <div class="score-board">
+      <span>Skor: <strong id="score">0</strong></span>
+      <span class="sp-badge">SP: <strong id="gameSp">0</strong></span>
+      <span id="songName" class="song-name">Belum ada lagu</span>
+    </div>
+    <div class="hp-container"><div id="hpBar" class="hp-fill"></div></div>
+    <div id="feedback" class="feedback">PILIH LAGU</div>
+  </div>
+
+  <div class="upload-section">
+    <input type="file" id="audioInput" accept="audio/*" />
+  </div>
+
+  <div class="game-board" id="gameBoard" data-tier="y">
+    <img id="boardBg" class="board-bg" alt="" />
+    <div id="boardFx" class="bfx"></div>
+    <div id="comboDisplay" class="combo-display">0</div>
+    <div class="track" data-key="KeyA"><div class="target-zone"><span class="icon">A</span><span class="sub">(L2)</span></div></div>
+    <div class="track" data-key="KeyS"><div class="target-zone"><span class="icon">S</span><span class="sub">(L1)</span></div></div>
+    <div class="track" data-key="KeyK"><div class="target-zone"><span class="icon">K</span><span class="sub">(R1)</span></div></div>
+    <div class="track" data-key="KeyL"><div class="target-zone"><span class="icon">L</span><span class="sub">(R2)</span></div></div>
+  </div>
+
+  <div class="controls">
+    <button id="btnPause" class="ctrl-btn" disabled>⏸ Pause (P)</button>
+    <button id="btnStop" class="ctrl-btn" disabled>⏹ Stop Audio (R)</button>
+    <button id="btnMenu" class="ctrl-btn">🏠 Menu</button>
+  </div>
+  <button id="startBtn">Mulai Game</button>
+</div>
+
+<div id="countdown" class="countdown" aria-hidden="true"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const mainMenu = $('mainMenu'), btnPlay = $('btnPlay'), btnHowToPlay = $('btnHowToPlay');
+const howToPlayModal = $('howToPlayModal'), btnCloseModal = $('btnCloseModal');
+const btnPause = $('btnPause'), btnStop = $('btnStop'), btnMenu = $('btnMenu'), startBtn = $('startBtn');
+const audioInput = $('audioInput'), feedbackEl = $('feedback'), comboEl = $('comboDisplay');
+const gameBoard = $('gameBoard'), songNameEl = $('songName'), cdEl = $('countdown');
+
+const keys = ['KeyA', 'KeyS', 'KeyK', 'KeyL'];
+const keyIcons = { KeyA: '←', KeyS: '↓', KeyK: '↑', KeyL: '→' };   // isi bit = panah; huruf A S K L ada di bar hit
+const tracks = {};
+keys.forEach(k => tracks[k] = document.querySelector(`.track[data-key="${k}"]`));
+
+let notes = [], score = 0, combo = 0, lastCombo = 0, hp = 100;
+let maxCombo = 0, hitCount = 0, missCount = 0;
+let isPlaying = false;   // ada sesi game berjalan (main atau pause)
+let isPaused = false;
+let isCounting = false;  // sedang hitungan mundur 3-2-1 (input dikunci)
+let songStarted = false; // audio lagu sudah benar-benar dimulai
+let cdTimer = 0;
+let audioContext, audioBuffer, audioSource, startTime = 0, rafId = 0;
+let allBeats = [], beatIndex = 0;
+
+const NOTE_H = 45, noteSpeed = 0.45, hitThreshold = 110;
+let targetY = 306, travelTime = 780;   // diukur dari layout oleh measureLayout()
+let perfectCount = 0, songTitle = '';
+
+// Posisi note disejajarkan dengan TENGAH zona target; note masuk dari luar layar atas
+function measureLayout() {
+  const track = tracks.KeyA, zone = track.querySelector('.target-zone');
+  const tr = track.getBoundingClientRect(), zr = zone.getBoundingClientRect();
+  if (!tr.height) return;
+  targetY = zr.top - tr.top + zr.height / 2 - NOTE_H / 2;
+  travelTime = (targetY + NOTE_H) / noteSpeed;
+}
+// Waktu lagu yang TERDENGAR: kurangi latensi output audio perangkat
+function getSongTime() {
+  const lat = Math.min(0.4, (audioContext.outputLatency || 0) + (audioContext.baseLatency || 0));
+  return audioContext.currentTime - lat - startTime;
+}
+const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+let lastSec = -1;
+function setProgress(t) {
+  const d = audioBuffer ? audioBuffer.duration : 0, p = d ? Math.min(1, Math.max(0, t / d)) : 0;
+  $('sbFill').style.width = `${p * 100}%`;
+  $('sbHead').style.left = `${p * 100}%`;
+  const sec = Math.floor(Math.max(0, t));
+  if (sec !== lastSec) { lastSec = sec; $('tCur').textContent = fmt(Math.max(0, t)); }
+}
+
+const gamepadMapping = { 6: 'KeyA', 4: 'KeyS', 5: 'KeyK', 7: 'KeyL' };
+let previousGamepadState = {};
+
+const canPlay = () => isPlaying && !isPaused && !isCounting;
+const menuIsOpen = () => !mainMenu.classList.contains('hidden');
+
+/* ---------- Menu utama (bebas bolak-balik) ---------- */
+function openMenu() {
+  if (isPlaying && !isPaused) pauseGame();
+  mainMenu.classList.remove('hidden');
+  setControls();
+}
+function closeMenu() { mainMenu.classList.add('hidden'); }
+
+btnPlay.addEventListener('click', closeMenu);
+btnMenu.addEventListener('click', openMenu);
+btnHowToPlay.addEventListener('click', () => howToPlayModal.classList.remove('hidden'));
+btnCloseModal.addEventListener('click', () => howToPlayModal.classList.add('hidden'));
+
+/* ---------- Kontrol UI ---------- */
+function setControls() {
+  btnPause.disabled = !isPlaying;
+  btnStop.disabled = !isPlaying;
+  btnPause.textContent = isPaused ? '▶ Lanjut (P)' : '⏸ Pause (P)';
+  startBtn.disabled = isPlaying;
+  btnPlay.textContent = isPlaying ? 'KEMBALI KE GAME' : 'PLAY GAME';
+}
+
+function showFeedback(text, color = '#fff') {
+  feedbackEl.innerText = text;
+  feedbackEl.style.color = color;
+}
+
+function updateUI() {
+  const tier = combo >= 30 ? 'r' : combo >= 10 ? 'b' : 'y';   // warna Badai Petir mengikuti combo
+  if (gameBoard.dataset.tier !== tier) {
+    gameBoard.dataset.tier = tier;
+    gameBoard.classList.add('tier-pop');
+    setTimeout(() => gameBoard.classList.remove('tier-pop'), 650);
+  }
+  $('score').innerText = score;
+  $('hpBar').style.width = `${Math.max(0, hp)}%`;
+  comboEl.textContent = combo;
+  comboEl.classList.toggle('show', combo > 0);
+  if (combo > lastCombo) {
+    comboEl.classList.remove('pop');
+    void comboEl.offsetWidth;
+    comboEl.classList.add('pop');
+  }
+  lastCombo = combo;
+}
+
+function clearNotes() {
+  notes.forEach(n => n.element.remove());
+  notes = [];
+  setProgress(0);
+}
+
+function releaseAllKeys() {
+  keys.forEach(k => tracks[k].querySelector('.target-zone').classList.remove('active'));
+}
+
+/* ---------- Pause / Stop ---------- */
+/* Hitungan mundur 3-2-1 (saat mulai game dan saat lanjut dari pause) */
+function cancelCountdown() {
+  clearTimeout(cdTimer);
+  isCounting = false;
+  cdEl.classList.remove('show');
+  cdEl.innerHTML = '';
+}
+function runCountdown(done) {
+  cancelCountdown();
+  isCounting = true;
+  releaseAllKeys();
+  let n = 3;
+  const step = () => {
+    cdEl.innerHTML = `<span>${n}</span>`;   // elemen baru tiap angka = animasi diulang
+    cdEl.classList.add('show');
+    cdTimer = setTimeout(() => {
+      if (--n > 0) { step(); return; }
+      cancelCountdown();
+      done();
+    }, 1000);
+  };
+  step();
+}
+
+async function pauseGame() {
+  if (!isPlaying || isPaused) return;
+  isPaused = true;
+  cancelCountdown();   // kalau pause saat hitungan mundur, hitungan diulang ketika lanjut
+  cancelAnimationFrame(rafId);
+  releaseAllKeys();
+  setControls();
+  showFeedback('PAUSE', '#00e5ff');
+  if (songStarted) { try { await audioContext.suspend(); } catch (e) {} }
+}
+
+function resumeGame() {
+  if (!isPlaying || !isPaused) return;
+  isPaused = false;
+  setControls();
+  showFeedback('BERSIAP...');
+  runCountdown(async () => {
+    if (!songStarted) { launchSong(); return; }   // pause terjadi sebelum lagu sempat mulai
+    try { await audioContext.resume(); } catch (e) {}
+    if (!isPlaying || isPaused) return;
+    showFeedback('MAIN!');
+    rafId = requestAnimationFrame(gameLoop);
+  });
+}
+
+function togglePause() { isPaused ? resumeGame() : pauseGame(); }
+
+function stopGame(message = 'STOP. PILIH LAGU') {
+  cancelCountdown();
+  songStarted = false;
+  cancelAnimationFrame(rafId);
+  if (audioSource) {
+    audioSource.onended = null;
+    try { audioSource.stop(); } catch (e) {}
+    try { audioSource.disconnect(); } catch (e) {}
+    audioSource = null;
+  }
+  if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+  isPlaying = false;
+  isPaused = false;
+  clearNotes();
+  releaseAllKeys();
+  score = 0; combo = 0; hp = 100; maxCombo = 0; hitCount = 0; missCount = 0; perfectCount = 0;
+  updateUI();
+  setControls();
+  showFeedback(message);
+}
+
+function stopSong() {
+  stopGame('STOP. PILIH LAGU BARU');
+  audioInput.value = '';   // lagu dilepas, siap pilih lagu baru
+}
+
+btnPause.addEventListener('click', togglePause);
+btnStop.addEventListener('click', stopSong);
+
+/* ---------- Input: keyboard ---------- */
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    if (rvEl.classList.contains('show')) closeReveal();
+    else if (!aboutModal.classList.contains('hidden')) aboutModal.classList.add('hidden');
+    else if (!eraseModal.classList.contains('hidden')) eraseModal.classList.add('hidden');
+    else if (!wpModal.classList.contains('hidden')) closeWp();
+    else if (!shopModal.classList.contains('hidden')) closeShop();
+    else if (!resultModal.classList.contains('hidden')) resultModal.classList.add('hidden');
+    else if (!howToPlayModal.classList.contains('hidden')) howToPlayModal.classList.add('hidden');
+    else if (menuIsOpen()) closeMenu();
+    else openMenu();
+    return;
+  }
+  // Jangan ganggu pengetikan (nama, kata "remove") maupun shortcut browser (Ctrl+R dll.)
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  if (e.code === 'KeyP') {            // P = pause / lanjut
+    if (!e.repeat && !menuIsOpen()) togglePause();
+    return;
+  }
+  if (e.code === 'KeyR') {            // R = stop / lepas lagu
+    if (!e.repeat && isPlaying && !menuIsOpen()) stopSong();
+    return;
+  }
+  if (!keys.includes(e.code) || !canPlay()) return;   // A S K L = lane
+  e.preventDefault();
+  if (e.repeat) return;
+  handleInputStart(e.code);
+}, { capture: true });
+
+window.addEventListener('keyup', (e) => {
+  if (keys.includes(e.code)) handleInputEnd(e.code);
+});
+
+/* ---------- Input: layar sentuh & mouse (pointer events, multi-touch) ---------- */
+keys.forEach(key => {
+  const trackEl = tracks[key];
+  trackEl.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (canPlay()) handleInputStart(key);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(type =>
+    trackEl.addEventListener(type, () => handleInputEnd(key)));
+});
+
+document.addEventListener('touchmove', (e) => {
+  if (canPlay()) e.preventDefault();
+}, { passive: false });
+
+function handleInputStart(key) {
+  tracks[key].querySelector('.target-zone').classList.add('active');
+  checkHit(key);
+}
+function handleInputEnd(key) {
+  tracks[key].querySelector('.target-zone').classList.remove('active');
+}
+
+/* ---------- Gamepad ---------- */
+let gamepadBlocked = false;
+function pollGamepad() {
+  if (gamepadBlocked) return;
+  let gp = null;
+  try {
+    gp = (navigator.getGamepads ? navigator.getGamepads() : [])[0];
+  } catch (err) {
+    gamepadBlocked = true; // gamepad diblokir (mis. di iframe OneCompiler), hentikan polling
+    return;
+  }
+  if (gp && canPlay()) {
+    Object.keys(gamepadMapping).forEach(i => {
+      if (!gp.buttons[i]) return;
+      const pressed = gp.buttons[i].pressed || gp.buttons[i].value > 0.3;
+      const k = gamepadMapping[i];
+      if (pressed && !previousGamepadState[i]) handleInputStart(k);
+      else if (!pressed && previousGamepadState[i]) handleInputEnd(k);
+      previousGamepadState[i] = pressed;
+    });
+  }
+  requestAnimationFrame(pollGamepad);
+}
+pollGamepad();
+
+/* ---------- Audio ---------- */
+function playHitSound() {
+  if (!audioContext) return;
+  const osc = audioContext.createOscillator();
+  const gain = audioContext.createGain();
+  const t = audioContext.currentTime;
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(160, t);
+  osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.08);
+  gain.gain.setValueAtTime(0.3, t);
+  gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+  osc.connect(gain);
+  gain.connect(audioContext.destination);
+  osc.start();
+  osc.stop(t + 0.08);
+}
+
+audioInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (isPlaying) stopGame('MEMUAT LAGU...');
+
+  showFeedback('SCANNING BASS...');
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    allBeats = await analyzeBassBeats(audioBuffer);
+    songNameEl.textContent = songTitle = file.name;
+    $('tTot').textContent = fmt(audioBuffer.duration);
+    lastSec = -1; setProgress(0);
+    showFeedback(`SIAP! (${allBeats.length} BASS)`);
+  } catch (err) {
+    showFeedback('GAGAL MEMUAT LAGU', '#ff4757');
+  }
+});
+
+/* Deteksi bass: filter 35-130 Hz FASE NOL (maju+mundur, tanpa pergeseran waktu), envelope 5 ms, lonjakan energi */
+async function analyzeBassBeats(buffer) {
+  const sr = buffer.sampleRate, N = buffer.length, ch = buffer.numberOfChannels, dur = N / sr;
+  const x = new Float32Array(N);
+  for (let c = 0; c < ch; c++) { const d = buffer.getChannelData(c); for (let i = 0; i < N; i++) x[i] += d[i] / ch; }
+  await new Promise(r => setTimeout(r, 20));   // beri waktu UI menampilkan "SCANNING"
+  const bq = (hpf, f) => {
+    const w = 2 * Math.PI * f / sr, cs = Math.cos(w), al = Math.sin(w) / 1.4142, a0 = 1 + al, b0 = (hpf ? 1 + cs : 1 - cs) / 2 / a0;
+    return { b0, b1: (hpf ? -(1 + cs) : 1 - cs) / a0, b2: b0, a1: -2 * cs / a0, a2: (1 - al) / a0, z1: 0, z2: 0 };
+  };
+  const run = fwd => {
+    const st = [bq(true, 35), bq(false, 130), bq(false, 130)];
+    for (let k = 0; k < N; k++) {
+      const i = fwd ? k : N - 1 - k; let v = x[i];
+      for (let j = 0; j < 3; j++) { const q = st[j], o = q.b0 * v + q.z1; q.z1 = q.b1 * v - q.a1 * o + q.z2; q.z2 = q.b2 * v - q.a2 * o; v = o; }
+      x[i] = v;
+    }
+  };
+  run(true); run(false);
+
+  const hs = Math.round(sr * 0.005), sec = hs / sr, nb = Math.floor(N / hs);
+  if (nb < 20) return [];
+  const e = new Float64Array(nb);
+  for (let b = 0; b < nb; b++) { let t = 0; for (let j = b * hs, m = j + hs; j < m; j++) t += x[j] * x[j]; e[b] = t / hs; }
+  const env = new Float64Array(nb);   // jendela 20 ms, env[b] berpusat di waktu (b+1)*sec
+  for (let b = 0; b < nb; b++) env[b] = Math.sqrt((e[Math.max(0, b - 1)] + e[b] + e[Math.min(nb - 1, b + 1)] + e[Math.min(nb - 1, b + 2)]) / 4);
+  const ref = Array.from(env).sort((p, q) => p - q)[Math.floor(nb * 0.99)] || 1e-9;
+  const c = env.map(v => Math.log(1 + 100 * v / ref));
+  const fl = new Float64Array(nb);
+  for (let f = 2; f < nb - 2; f++) fl[f] = Math.max(0, c[f + 2] - c[f - 2]);   // kenaikan energi (selisih terpusat)
+
+  const ps = new Float64Array(nb + 1), ps2 = new Float64Array(nb + 1);
+  for (let i = 0; i < nb; i++) { ps[i + 1] = ps[i] + fl[i]; ps2[i + 1] = ps2[i] + fl[i] * fl[i]; }
+  const pick = k => {
+    const out = []; let last = 0;
+    for (let f = 6; f < nb - 6; f++) {
+      const a = Math.max(0, f - 100), b = Math.min(nb, f + 101), m = (ps[b] - ps[a]) / (b - a);
+      const sd = Math.sqrt(Math.max(0, (ps2[b] - ps2[a]) / (b - a) - m * m)), v = fl[f];
+      if (v < Math.max(m + k * sd, 0.3)) continue;
+      let ok = true;
+      for (let d = 1; d <= 6 && ok; d++) if (fl[f - d] > v || fl[f + d] >= v) ok = false;
+      if (!ok) continue;
+      const den = fl[f - 1] - 2 * v + fl[f + 1];
+      const dl = den < 0 ? Math.max(-0.5, Math.min(0.5, 0.5 * (fl[f - 1] - fl[f + 1]) / den)) : 0;   // interpolasi sub-frame
+      const t = (f + 1 + dl) * sec;
+      if (out.length && t - out[out.length - 1] < 0.18) { if (v > last) { out[out.length - 1] = t; last = v; } continue; }
+      out.push(t); last = v;
+    }
+    return out;
+  };
+  let beats = pick(1.2);   // sesuaikan kepekaan otomatis: ~0,8 - 4 bit per detik
+  for (const k of [1.6, 2, 2.6, 3.2]) if (beats.length > dur * 4.2) beats = pick(k);
+  for (const k of [0.8, 0.5, 0.3, 0.15]) if (beats.length < dur * 0.8) beats = pick(k);
+  return beats;
+}
+
+/* ---------- Game ---------- */
+function startGame() {
+  if (!audioBuffer) { showFeedback('UPLOAD LAGU DULU YA!', '#ff4757'); return; }
+  if (isPlaying) return;
+
+  score = 0; combo = 0; hp = 100; lastCombo = 0; maxCombo = 0; hitCount = 0; missCount = 0; perfectCount = 0;
+  beatIndex = 0;            // beat tidak dihapus, jadi lagu yang sama bisa diulang
+  clearNotes();
+  updateUI();
+  showFeedback('BERSIAP...');
+
+  if (audioContext.state !== 'running') audioContext.resume();
+  measureLayout();
+
+  songStarted = false;
+  isPlaying = true;
+  isPaused = false;
+  setControls();
+  runCountdown(launchSong);   // 3-2-1 dulu, baru lagu dan note mulai
+}
+
+function launchSong() {
+  if (!isPlaying || isPaused) return;
+  audioSource = audioContext.createBufferSource();
+  audioSource.buffer = audioBuffer;
+  audioSource.connect(audioContext.destination);
+  measureLayout();
+  startTime = audioContext.currentTime + travelTime / 1000 + 0.15;   // jeda awal: note pertama sempat turun penuh
+  audioSource.start(startTime);
+  songStarted = true;
+  showFeedback('MAIN!');
+
+  audioSource.onended = () => {
+    if (!isPlaying) return;
+    cancelAnimationFrame(rafId);
+    isPlaying = false;
+    isPaused = false;
+    songStarted = false;
+    audioSource = null;
+    setControls();
+    setProgress(audioBuffer.duration);
+    showFeedback(`SELESAI! SKOR ${score}`, '#00e5ff');
+    showResults();
+  };
+
+  rafId = requestAnimationFrame(gameLoop);
+}
+startBtn.addEventListener('click', startGame);
+
+function gameLoop() {
+  if (!isPlaying || isPaused) return;
+  const songTime = getSongTime();
+
+  setProgress(songTime);
+  while (beatIndex < allBeats.length && songTime >= allBeats[beatIndex] - travelTime / 1000) {
+    spawnNoteForBeat(allBeats[beatIndex]);
+    beatIndex++;
+  }
+
+  for (let i = notes.length - 1; i >= 0; i--) {
+    const note = notes[i];
+    const timeUntilBeat = (note.targetBeatTime - songTime) * 1000;
+    note.y = targetY - (timeUntilBeat * noteSpeed);
+    note.element.style.top = `${note.y}px`;
+    note.element.classList.toggle('near', Math.abs(timeUntilBeat) <= hitThreshold);
+
+    if (timeUntilBeat < -hitThreshold) {
+      fadeOutMissed(note.element);
+      notes.splice(i, 1);
+      handleMiss();
+    }
+  }
+  rafId = requestAnimationFrame(gameLoop);
+}
+
+function spawnNoteForBeat(beatTime) {
+  const key = keys[Math.floor(Math.random() * keys.length)];
+  const el = document.createElement('div');
+  el.classList.add('note', key);
+  el.innerText = keyIcons[key];
+  el.style.top = '-50px';
+  tracks[key].appendChild(el);
+  notes.push({ key, targetBeatTime: beatTime, element: el, y: -50 });
+}
+
+function checkHit(pressedKey) {
+  if (!audioContext) return;
+  const songTime = getSongTime();
+  let hitIndex = -1, minDiff = Infinity;
+
+  for (let i = 0; i < notes.length; i++) {
+    if (notes[i].key === pressedKey) {
+      const diff = Math.abs((notes[i].targetBeatTime - songTime) * 1000);
+      if (diff < minDiff) { minDiff = diff; hitIndex = i; }
+    }
+  }
+
+  if (hitIndex !== -1 && minDiff <= hitThreshold) {
+    playHitSound();
+    combo++;
+    hitCount++;
+    if (minDiff < 30) perfectCount++;
+    save.sp++; save.bits++; save.spEarned++;                 // 1 bit berhasil ditekan = 1 SP
+    persist();
+    updateSpLabels();
+    if (combo > maxCombo) maxCombo = combo;
+    hp = Math.min(100, hp + 3);
+    score += Math.max(20, 100 - Math.floor(minDiff)) + (combo * 2);
+    updateUI();
+
+    const zone = tracks[pressedKey].querySelector('.target-zone');
+    if (minDiff < 30) {
+      showFeedback('PERFECT!! 💥', '#2ed573');
+      triggerEffects(zone, 'hit-perfect');
+    } else {
+      showFeedback('GOOD!', '#ffa502');
+      triggerEffects(zone, 'hit-good');
+    }
+    spawnHitEffect(pressedKey, minDiff < 30 ? 'perfect' : 'good');
+    const hn = notes[hitIndex];
+    if (gameBoard.dataset.zone === 'blackhole') swallowNote(hn.element, targetY - hn.y, zone);
+    else hn.element.remove();
+    notes.splice(hitIndex, 1);
+  }
+}
+
+// Lubang Hitam Galaksi: bit yang kena tersedot ke pusat bar hit
+function swallowNote(el, dy, zone) {
+  el.classList.remove('near');
+  el.style.setProperty('--dy', `${dy}px`);
+  el.classList.add('absorbed');
+  zone.classList.add('bh-feed');
+  clearTimeout(zone._bhT);
+  zone._bhT = setTimeout(() => zone.classList.remove('bh-feed'), 520);
+  setTimeout(() => el.remove(), 480);
+}
+
+function handleMiss() {
+  missCount++;
+  combo = 0;
+  hp = Math.max(0, hp - 4);
+  updateUI();
+  showFeedback('MISS!', '#ff4757');
+  gameBoard.classList.add('miss-flash');
+  setTimeout(() => gameBoard.classList.remove('miss-flash'), 150);
+}
+
+function fadeOutMissed(el) {
+  el.classList.remove('near');
+  el.classList.add('missed');
+  setTimeout(() => el.remove(), 260);
+}
+
+function triggerEffects(zone, type) {
+  gameBoard.classList.add('hit-shake');
+  zone.classList.add(type);
+  setTimeout(() => {
+    gameBoard.classList.remove('hit-shake');
+    zone.classList.remove(type);
+  }, 100);
+}
+
+/* ---------- Shop animasi bit (1 bit kena = 1 SP) ---------- */
+const FX_LIST = [
+  { id: 'default', name: 'Neon Standar', price: 0,    desc: 'Ekor cahaya, cincin, dan percikan.' },
+  { id: 'comet',   name: 'Komet',        price: 500,  desc: 'Meluncur seperti komet, meledak jadi garis cahaya.' },
+  { id: 'crystal', name: 'Kristal',      price: 1000, desc: 'Berkilau saat turun, pecah jadi serpihan.' },
+  { id: 'inferno', name: 'Api',          price: 1250, desc: 'Berkobar saat turun, meledak jadi bola api.' }
+];
+const BAR_LIST = [
+  { id: 'neon',   name: 'Neon Standar',   price: 0,   desc: 'Bar cahaya biru neon sederhana.' },
+  { id: 'grass',  name: 'Tanah & Rumput', price: 100, desc: 'Rumput hijau di atas tanah coklat 2D. Rumput bergoyang, cahaya berkilau, serbuk sari melayang, tunas tumbuh di ujung bar.' },
+  { id: 'castle', name: 'Lantai Kastil',  price: 200, desc: 'Lantai batu kastil dengan list emas. Obor menyala memantulkan cahaya hangat dan percikan api.' },
+  { id: 'galaxy', name: 'Galaksi',        price: 300, desc: 'Nebula mengalir, bintang berkelip, bintang jatuh, dan komet bercahaya di ujung bar.' }
+];
+FX_LIST.push({ id: 'secret', name: 'Prisma Admin', secret: true, desc: 'Bit pelangi berputar dengan ekor cahaya.' });
+BAR_LIST.push({ id: 'secret', name: 'Prisma Admin', secret: true, desc: 'Bar durasi pelangi mengalir dengan bintang berkilau.' });
+const HP_LIST = [{ id: 'default', name: 'Standar', price: 0, desc: 'Health bar merah-hijau bawaan.' },
+  { id: 'secret', name: 'Prisma Admin', secret: true, desc: 'Health bar pelangi mengalir dengan kilau.' }];
+const HIT_LIST = [{ id: 'default', name: 'Standar', price: 0, desc: 'Efek hit mengikuti animasi bit yang dipakai.' },
+  { id: 'secret', name: 'Ledakan Bintang', secret: true, desc: 'Gelombang cahaya dan semburan bintang pelangi saat bit kena.' }];
+const ZONE_LIST = [{ id: 'default', name: 'Standar', price: 0, desc: 'Zona target polos.' },
+  { id: 'blackhole', name: 'Lubang Hitam Galaksi', price: 100, desc: 'Bar hit berwarna galaksi: nebula berputar dan bintang berkelip. Saat ditekan, lubang hitam terbuka dan bit tersedot masuk ke dalamnya.' },
+  { id: 'secret', name: 'Pemindai Pelangi', secret: true, desc: 'Garis cahaya memindai dan bingkai berganti warna pelangi.' }];
+const BORDER_LIST = [
+  { id: 'none',   name: 'Tanpa Animasi', price: 0, desc: 'Border game polos (bawaan).' },
+  { id: 'storm',  name: 'Badai Petir',   price: 2000, desc: 'Hujan petir menyelimuti game. Warna dan derasnya berubah mengikuti combo: kuning (0-9), biru (10-29), merah (30+).' },
+  { id: 'galaxy', name: 'Galaksi Epik',  price: 3000, desc: 'Nebula, planet bercincin, bintang berjatuhan, dan roket yang melesat di sepanjang border berwarna kosmik.' }
+];
+const CATS = { fx: [FX_LIST, 'owned', 'equipped'], bar: [BAR_LIST, 'barOwned', 'barEquipped'], hp: [HP_LIST, 'hpOwned', 'hpEquipped'],
+  hit: [HIT_LIST, 'hitOwned', 'hitEquipped'], zone: [ZONE_LIST, 'zoneOwned', 'zoneEquipped'], border: [BORDER_LIST, 'borderOwned', 'borderEquipped'] };
+const DEFAULT_ID = { owned: 'default', equipped: 'default', barOwned: 'neon', barEquipped: 'neon', hpOwned: 'default', hpEquipped: 'default',
+  hitOwned: 'default', hitEquipped: 'default', zoneOwned: 'default', zoneEquipped: 'default', borderOwned: 'none', borderEquipped: 'none' };
+const freshSave = () => {
+  const o = { sp: 0, ts: 0, name: '', songs: 0, bits: 0, bestCombo: 0, spEarned: 0, last: null, rank: -1, bestRank: -1, fullStreak: 0, secret: false, lastChange: null };
+  Object.entries(DEFAULT_ID).forEach(([k, v]) => o[k] = /owned$/i.test(k) ? [v] : v);
+  return o;
+};
+const SAVE_KEY = 'rhythmBeatSave';
+let save = freshSave();
+let shopTab = 'fx';
+const btnShop = $('btnShop'), shopModal = $('shopModal'), shopList = $('shopList'), shopStatus = $('shopStatus');
+let pvTimer = null, pvStep = 0;
+
+/* ---- Auto-save: localStorage + cadangan + IndexedDB, digabung saat dimuat, item tidak pernah dibuang ---- */
+const SAVE_VER = 2, SAVE_BAK = SAVE_KEY + '.bak';
+let idbOk = !!window.indexedDB, idbTimer = null, dirty = false, lastSaveSec = '';
+function normSave(d) {
+  if (!d || typeof d !== 'object') return null;
+  const r = { ts: Number(d.ts) || 0, sp: Number.isFinite(d.sp) ? Math.max(0, d.sp) : 0, name: typeof d.name === 'string' ? d.name.slice(0, 20) : '',
+    last: d.last && typeof d.last === 'object' ? d.last : null, lastChange: d.lastChange && typeof d.lastChange === 'object' ? d.lastChange : null,
+    rank: Number.isInteger(d.rank) ? d.rank : -1, bestRank: Number.isInteger(d.bestRank) ? d.bestRank : -1,
+    fullStreak: Math.max(0, +d.fullStreak || 0), secret: !!d.secret };
+  ['songs', 'bits', 'bestCombo', 'spEarned'].forEach(k => r[k] = Math.max(0, +d[k] || 0));
+  Object.keys(DEFAULT_ID).forEach(k => r[k] = /owned$/i.test(k) ? (Array.isArray(d[k]) ? d[k].filter(x => typeof x === 'string') : []) : (typeof d[k] === 'string' ? d[k] : DEFAULT_ID[k]));
+  return r;
+}
+function mergeSaves(list) {
+  const c = list.map(normSave).filter(Boolean).sort((x, y) => y.ts - x.ts);
+  if (!c.length) return;
+  const b = c[0];
+  ['ts', 'sp', 'name', 'last', 'lastChange', 'rank', 'fullStreak'].forEach(k => save[k] = b[k]);
+  ['songs', 'bits', 'bestCombo', 'spEarned', 'bestRank'].forEach(k => save[k] = Math.max(...c.map(x => x[k])));
+  save.secret = c.some(x => x.secret);
+  Object.keys(DEFAULT_ID).forEach(k => { save[k] = /owned$/i.test(k) ? [...new Set([DEFAULT_ID[k], ...c.flatMap(x => x[k])])] : b[k]; });
+  Object.values(CATS).forEach(([, o, e]) => { if (!save[o].includes(save[e])) save[e] = DEFAULT_ID[e]; });
+}
+function readLS(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
+function loadSave() { mergeSaves([readLS(SAVE_KEY), readLS(SAVE_BAK)]); }
+async function loadSaveIdb() {
+  try {
+    const v = await idbRun('readonly', st => st.get('save'));
+    if (v) {
+      mergeSaves([save, v]); applyFx(); updateSpLabels(); renderAbout();
+      if (!shopModal.classList.contains('hidden')) renderShop();
+    }
+    persist();
+  } catch (e) { idbOk = false; }
+}
+function flushSave() {
+  dirty = false;
+  return idbRun('readwrite', st => st.put({ v: SAVE_VER, ...save }, 'save')).then(() => { idbOk = true; }, () => { idbOk = false; });
+}
+function persist() {
+  save.ts = Date.now(); dirty = true;
+  let ok = false;
+  try {
+    const old = localStorage.getItem(SAVE_KEY);
+    if (old) localStorage.setItem(SAVE_BAK, old);
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ v: SAVE_VER, ...save }));
+    ok = true;
+  } catch (e) {}
+  clearTimeout(idbTimer); idbTimer = setTimeout(flushSave, 800);
+  const t = new Date().toLocaleTimeString('id-ID');
+  if (t !== lastSaveSec) { lastSaveSec = t; $('saveStatus').textContent = `Auto-save aktif · tersimpan ${t}`; }
+  return ok;
+}
+window.addEventListener('pagehide', () => { if (dirty) flushSave(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && dirty) flushSave(); });
+
+function applyFx() {
+  gameBoard.dataset.fx = save.equipped; gameBoard.dataset.hit = save.hitEquipped; gameBoard.dataset.zone = save.zoneEquipped;
+  gameBoard.dataset.bd = save.borderEquipped; $('boardFx').innerHTML = bfxHtml(save.borderEquipped);
+  $('songBar').dataset.bar = save.barEquipped; $('hpBar').parentElement.dataset.hp = save.hpEquipped;
+}
+
+function updateSpLabels() {
+  btnShop.textContent = `🛒 SHOP (${save.sp} SP)`;
+  $('shopSp').textContent = save.sp;
+  $('gameSp').textContent = save.sp;
+}
+
+function afterShopChange(msg) {
+  applyFx();
+  shopStatus.textContent = (persist() || idbOk) ? msg : `${msg} (tidak tersimpan: penyimpanan browser diblokir)`;
+  updateSpLabels();
+  renderShop();
+}
+
+function renderShop() {
+  const [list, ownK, eqK] = CATS[shopTab], wide = shopTab !== 'fx';
+  document.querySelectorAll('.shop-tab').forEach(t => t.classList.toggle('on', t.dataset.tab === shopTab));
+  shopList.innerHTML = '';
+  list.forEach(fx => {
+    const ownedL = save[ownK], owned = ownedL.includes(fx.id), equipped = save[eqK] === fx.id;
+    const card = document.createElement('div');
+    card.className = 'shop-item' + (wide ? ' bar-item' : '') + (equipped ? ' equipped' : '');
+    const lane = '<div class="pv-lane"><div class="pv-zone"></div></div>';
+    const pv = {
+      fx: `<div class="pv" data-fx="${fx.id}">${lane}</div>`,
+      bar: `<div class="pv-bar"><div class="song-bar pv-anim" data-bar="${fx.id}"><div class="sb-track"><div class="sb-fill"></div></div><div class="sb-head"><i></i><i></i><i></i></div></div></div>`,
+      hp: `<div class="pv-bar"><div class="hp-container" data-hp="${fx.id}" style="margin:0"><div class="hp-fill" style="width:70%"></div></div></div>`,
+      hit: `<div class="pv" data-fx="default" data-hit="${fx.id}">${lane}</div>`,
+      zone: `<div class="pv" data-fx="default" data-zone="${fx.id}">${lane}</div>`,
+      border: `<div class="pv pvb" data-bd="${fx.id}" data-tier="y"${fx.id === 'storm' ? ' data-tierpv="1"' : ''}><div class="bfx">${bfxHtml(fx.id)}</div><span class="pvb-lbl">${fx.id === 'storm' ? 'Combo 0-9' : fx.id === 'none' ? 'Polos' : ''}</span></div>`
+    }[shopTab];
+    card.innerHTML = `${pv}<div class="shop-info"><strong>${fx.name}</strong><span>${fx.desc}</span>
+      <span class="price">${fx.secret ? '🔒 Paket Secret' : (fx.price ? fx.price + ' SP' : 'Gratis')}</span></div>`;
+    const btn = document.createElement('button');
+    btn.className = 'menu-btn shop-btn';
+    if (equipped) { btn.textContent = 'DIPAKAI'; btn.disabled = true; }
+    else if (owned) {
+      btn.textContent = 'PAKAI';
+      btn.addEventListener('click', () => { save[eqK] = fx.id; afterShopChange(`${fx.name} dipakai.`); });
+    } else if (fx.secret) {
+      btn.textContent = '🔒 TERBUKA SETELAH 3 GAME 100% BERTURUT-TURUT'; btn.disabled = true;
+    } else {
+      btn.textContent = `BELI ${fx.price} SP`;
+      btn.disabled = save.sp < fx.price;
+      btn.addEventListener('click', () => {
+        if (save.sp < fx.price) return;
+        save.sp -= fx.price; ownedL.push(fx.id); save[eqK] = fx.id;
+        afterShopChange(`${fx.name} dibeli dan dipakai. Sisa SP: ${save.sp}`);
+      });
+    }
+    card.appendChild(btn);
+    shopList.appendChild(card);
+  });
+}
+document.querySelectorAll('.shop-tab').forEach(t => t.addEventListener('click', () => { shopTab = t.dataset.tab; renderShop(); }));
+
+// Pratinjau: bit turun, kena, kena, lalu tidak tertekan (berulang)
+function previewTick() {
+  const result = ['hit', 'hit', 'miss'][pvStep++ % 3];
+  const tr = ['y', 'b', 'r'][pvStep % 3], lb = ['Combo 0-9', 'Combo 10-29', 'Combo 30+'][pvStep % 3];
+  shopList.querySelectorAll('[data-tierpv]').forEach(el => { el.dataset.tier = tr; el.querySelector('.pvb-lbl').textContent = lb; });
+  shopList.querySelectorAll('.pv-lane').forEach(lane => {
+    const tgt = (lane.clientHeight || 150) - 52.5;   // tengah bar hit; tinggi pratinjau beda tiap tab
+    const note = document.createElement('div');
+    note.className = 'note KeyK';
+    note.textContent = '↑';
+    note.style.top = '-50px';
+    lane.appendChild(note);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      note.style.transition = 'top 1s linear';
+      note.style.top = `${tgt}px`;
+    }));
+    setTimeout(() => note.classList.add('near'), 800);
+    setTimeout(() => {
+      if (result === 'hit') {
+        spawnHitEffectIn(lane, 'KeyK', 'perfect');
+        if (lane.closest('[data-zone=blackhole]')) swallowNote(note, 0, lane.querySelector('.pv-zone'));
+        else note.remove();
+      }
+      else fadeOutMissed(note);
+    }, 1000);
+  });
+}
+function stopPreview() { clearInterval(pvTimer); pvTimer = null; }
+function openShop() {
+  shopStatus.textContent = '';
+  renderShop();
+  shopModal.classList.remove('hidden');
+  stopPreview();
+  previewTick();
+  pvTimer = setInterval(previewTick, 1600);
+}
+function closeShop() { shopModal.classList.add('hidden'); stopPreview(); }
+
+btnShop.addEventListener('click', openShop);
+$('btnCloseShop').addEventListener('click', closeShop);
+loadSave();
+applyFx();
+updateSpLabels();
+
+/* ---------- Hasil akhir game ---------- */
+const resultModal = $('resultModal');
+function showResults() {
+  const total = allBeats.length;
+  $('resScore').textContent = score;
+  $('resCombo').textContent = maxCombo;
+  $('resHit').textContent = `${hitCount} / ${total}`;
+  $('resAcc').textContent = `${pctOf(hitCount, total)}%`;
+  $('resSp').textContent = `+${hitCount} (total ${save.sp})`;
+  $('infoTitle').textContent = songTitle || '-';
+  $('infoDur').textContent = fmt(audioBuffer ? audioBuffer.duration : 0);
+  $('infoBits').textContent = total;
+  $('infoHit').textContent = `${hitCount} dari ${total}`;
+  $('infoJudge').textContent = `${perfectCount} / ${hitCount - perfectCount} / ${Math.max(0, total - hitCount)}`;
+  const pct = pctOf(hitCount, total);
+  $('resGreet').textContent = `🎉 Selamat, ${save.name || 'User'}! Kamu berhasil menyelesaikan lagu ini.`;
+  save.songs++; save.bestCombo = Math.max(save.bestCombo, maxCombo);
+  save.last = { title: songTitle || '-', dur: fmt(audioBuffer ? audioBuffer.duration : 0), score, combo: maxCombo, hit: hitCount, total, pct,
+    perfect: perfectCount, good: hitCount - perfectCount, miss: Math.max(0, total - hitCount), sp: hitCount, at: new Date().toLocaleString('id-ID') };
+  const prev = save.rank, now = rankFor(hitCount, total);
+  const dir = prev < 0 || now > prev ? 'up' : now < prev ? 'down' : 'same';
+  const txt = prev < 0 ? '✨ Rank pertamamu!' : dir === 'up' ? `▲ NAIK dari ${RANKS[prev].n}` : dir === 'down' ? `▼ TURUN dari ${RANKS[prev].n}` : '● Rank bertahan';
+  save.rank = now; save.bestRank = Math.max(save.bestRank, now); save.lastChange = { dir, txt };
+  save.fullStreak = total && hitCount === total ? save.fullStreak + 1 : 0;
+  let unlocked = false;
+  if (!save.secret && save.fullStreak >= 3) { save.secret = true; unlocked = true; grantSecret(); }
+  $('resRank').innerHTML = '';
+  playRankReveal(now, dir, txt, pct, () => { $('resRank').innerHTML = rankHtml(now, 'rk-' + dir) + `<div class="rank-delta ${dir}">${txt}</div>`; });
+  $('resSecret').innerHTML = unlocked
+    ? '<div class="secret-box">🎁 <b>PAKET SECRET TERBUKA!</b><br>3 game berturut-turut 100% benar.<br>Dapat: animasi bit, bar durasi, health bar, hit bit, dan bar hit bit. Pakai di Shop.</div>'
+    : (!save.secret && save.fullStreak ? `<div class="bg-status" style="margin:0 0 12px">🔥 Streak 100% benar: ${save.fullStreak}/3</div>` : '');
+  persist(); renderAbout();
+  resultModal.classList.remove('hidden');
+}
+$('btnRetry').addEventListener('click', () => { resultModal.classList.add('hidden'); startGame(); });
+$('btnCloseResult').addEventListener('click', () => resultModal.classList.add('hidden'));
+
+/* ---------- Efek saat note kena ---------- */
+const keyColors = { KeyA: '#ff4757', KeyS: '#2ed573', KeyK: '#ffa502', KeyL: '#1e90ff' };
+
+function spawnHitEffect(key, grade) { spawnHitEffectIn(tracks[key], key, grade); }
+
+function spawnHitEffectIn(container, key, grade) {
+  const fx = document.createElement('div');
+  fx.className = 'hit-fx';
+  fx.style.setProperty('--c', keyColors[key]);
+  fx.appendChild(Object.assign(document.createElement('span'), { className: 'fx-ring' }));
+  const zs = container.closest('[data-zone]'), bh = !!zs && zs.dataset.zone === 'blackhole';
+  if (bh) fx.classList.add('bh-fx');   // efek runtuh ke dalam (tersedot), bukan meledak keluar
+
+  const count = bh ? (grade === 'perfect' ? 14 : 8) : (grade === 'perfect' ? 10 : 6);
+  for (let i = 0; i < count; i++) {
+    const spark = document.createElement('span');
+    spark.className = 'fx-spark';
+    const ang = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const dist = 35 + Math.random() * 30;
+    spark.style.setProperty('--dx', `${Math.cos(ang) * dist}px`);
+    spark.style.setProperty('--dy', `${Math.sin(ang) * dist}px`);
+    spark.style.setProperty('--ang', `${ang * 180 / Math.PI}deg`);
+    spark.style.setProperty('--rot', `${Math.random() * 360}deg`);
+    if (bh) spark.style.setProperty('--c', ['#e9d5ff', '#c084fc', '#67e8f9', '#f9a8d4'][i % 4]);
+    fx.appendChild(spark);
+  }
+  if (bh) {
+    fx.appendChild(Object.assign(document.createElement('span'), { className: 'bh-ring2' }));
+    fx.appendChild(Object.assign(document.createElement('span'), { className: 'bh-flash' }));
+  }
+
+  const hs = container.closest('[data-hit]');
+  if (hs && hs.dataset.hit === 'secret') {
+    fx.appendChild(Object.assign(document.createElement('span'), { className: 'hx-wave' }));
+    for (let i = 0; i < 12; i++) {
+      const st = document.createElement('span'), ang = Math.PI * 2 * i / 12, d = 45 + (i % 2) * 25;
+      st.className = 'hx-star';
+      st.style.setProperty('--dx', `${Math.cos(ang) * d}px`); st.style.setProperty('--dy', `${Math.sin(ang) * d}px`); st.style.setProperty('--h', i * 30);
+      fx.appendChild(st);
+    }
+  }
+  const txt = document.createElement('span');
+  txt.className = `fx-text ${grade}`;
+  txt.textContent = grade === 'perfect' ? 'PERFECT' : 'GOOD';
+  fx.appendChild(txt);
+
+  container.appendChild(fx);
+  setTimeout(() => fx.remove(), bh ? 760 : 600);
+}
+
+/* ---------- Background kustom (disimpan di browser) ---------- */
+const BG_KEY = 'rhythmBeatBackground';
+const bgInput = $('bgInput'), btnBg = $('btnBg');
+
+// Perkecil gambar (maks 1280 px). Tanpa blob URL, jadi tidak terhalang pembatasan halaman.
+async function imageToDataUrl(file, maxSide = 1280) {
+  let source, w, h;
+  try {
+    source = await createImageBitmap(file);
+    w = source.width; h = source.height;
+  } catch (e1) {
+    // Cadangan: FileReader + <img>
+    const dataUrl = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(new Error('file tidak bisa dibaca'));
+      r.readAsDataURL(file);
+    });
+    source = await new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => res(img);
+      img.onerror = () => rej(new Error('format gambar tidak didukung browser'));
+      img.src = dataUrl;
+    });
+    w = source.naturalWidth; h = source.naturalHeight;
+  }
+  const ratio = Math.min(1, maxSide / Math.max(w, h));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * ratio));
+  c.height = Math.max(1, Math.round(h * ratio));
+  c.getContext('2d').drawImage(source, 0, 0, c.width, c.height);
+  if (source.close) source.close();
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
+
+// Penyimpanan background: IndexedDB (muat file besar/GIF), cadangan localStorage
+function idbOpen() {
+  return new Promise((res, rej) => {
+    if (!window.indexedDB) return rej(new Error('IndexedDB tidak tersedia'));
+    const r = indexedDB.open('rhythmBeatDB', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbRun(mode, fn) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', mode);
+    const req = fn(tx.objectStore('kv'));
+    tx.oncomplete = () => { db.close(); res(req.result); };
+    tx.onerror = tx.onabort = () => { db.close(); rej(tx.error); };
+  });
+}
+async function saveBackground(dataUrl) {
+  try {
+    await idbRun('readwrite', st => st.put(dataUrl, BG_KEY));
+    try { localStorage.removeItem(BG_KEY); } catch (e) {}
+    return true;
+  } catch (e) {}
+  try { localStorage.setItem(BG_KEY, dataUrl); return true; } catch (e) {}
+  return false;
+}
+async function loadBackground() {
+  try { const v = await idbRun('readonly', st => st.get(BG_KEY)); if (v) return v; } catch (e) {}
+  try { return localStorage.getItem(BG_KEY); } catch (e) { return null; }
+}
+async function removeBackground() {
+  try { await idbRun('readwrite', st => st.delete(BG_KEY)); } catch (e) {}
+  try { localStorage.removeItem(BG_KEY); } catch (e) {}
+}
+
+function readAsDataUrl(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(new Error('file tidak bisa dibaca'));
+    r.readAsDataURL(file);
+  });
+}
+
+/* ---- Galeri wallpaper: banyak wallpaper tersimpan, ditampilkan lewat <img> (GIF tetap beranimasi) ---- */
+const WP_LS = 'rhythmBeatWpIndex', WP_MAX = 8, wpMem = {};
+let wp = { ids: [], names: {}, active: null };
+const wpModal = $('wpModal'), wpGrid = $('wpGrid'), wpStatus = $('wpStatus'), bgImg = $('bgImg'), boardBg = $('boardBg');
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+function applyBackground(d) {
+  [bgImg, boardBg].forEach(im => {
+    if (d) { im.src = d; im.style.display = 'block'; }
+    else { im.removeAttribute('src'); im.style.display = 'none'; }
+  });
+}
+async function wpGet(id) {
+  if (wpMem[id]) return wpMem[id];
+  try { return await idbRun('readonly', st => st.get('wp:' + id)); } catch (e) { return null; }
+}
+async function wpPut(item) {
+  try { await idbRun('readwrite', st => st.put(item, 'wp:' + item.id)); return true; }
+  catch (e) { wpMem[item.id] = item; return false; }   // IndexedDB diblokir: hanya bertahan selama sesi
+}
+async function wpSaveIndex() {
+  try { localStorage.setItem(WP_LS, JSON.stringify(wp)); } catch (e) {}
+  try { await idbRun('readwrite', st => st.put(wp, 'wpIndex')); } catch (e) {}
+}
+async function wpInit() {
+  let idx = null;
+  try { idx = await idbRun('readonly', st => st.get('wpIndex')); } catch (e) {}
+  if (!idx) idx = readLS(WP_LS);
+  if (idx && Array.isArray(idx.ids)) wp = { ids: idx.ids, names: idx.names || {}, active: idx.active || null };
+  const old = await loadBackground();   // migrasi wallpaper tunggal dari versi lama
+  if (old && wp.ids.length < WP_MAX) {
+    const id = newId();
+    const ok = await wpPut({ id, name: 'Wallpaper lama', data: old });
+    wp.ids.push(id); wp.names[id] = 'Wallpaper lama'; if (!wp.active) wp.active = id;
+    if (ok) await removeBackground();
+    await wpSaveIndex();
+  }
+  if (wp.active) { const it = await wpGet(wp.active); if (it) applyBackground(it.data); else wp.active = null; }
+}
+async function wpUse(id) {
+  const it = await wpGet(id);
+  if (!it) { wpStatus.textContent = 'Data wallpaper tidak ditemukan.'; return; }
+  wp.active = id; applyBackground(it.data); await wpSaveIndex(); renderWp();
+  wpStatus.textContent = `${wp.names[id] || 'Wallpaper'} dipakai.`;
+}
+async function wpRemove(id) {
+  await new Promise(r => r());
+  delete wpMem[id];
+  try { await idbRun('readwrite', st => st.delete('wp:' + id)); } catch (e) {}
+  wp.ids = wp.ids.filter(x => x !== id); delete wp.names[id];
+  if (wp.active === id) { wp.active = null; applyBackground(null); }
+  await wpSaveIndex(); renderWp();
+  wpStatus.textContent = 'Wallpaper dihapus.';
+}
+function renderWp() {
+  wpGrid.innerHTML = '';
+  if (!wp.ids.length) { wpGrid.innerHTML = '<p class="wp-empty">Belum ada wallpaper. Tambahkan JPG, PNG, atau GIF.</p>'; return; }
+  wp.ids.forEach(id => {
+    const active = wp.active === id, card = document.createElement('div');
+    card.className = 'wp-item' + (active ? ' active' : '');
+    card.innerHTML = '<img alt=""><span></span><div class="row"></div>';
+    card.querySelector('span').textContent = wp.names[id] || 'Wallpaper';
+    const use = document.createElement('button'), del = document.createElement('button');
+    use.className = del.className = 'menu-btn';
+    use.textContent = active ? 'DIPAKAI' : 'PAKAI'; use.disabled = active;
+    del.textContent = 'HAPUS';
+    use.addEventListener('click', () => wpUse(id));
+    del.addEventListener('click', () => wpRemove(id));
+    card.querySelector('.row').append(use, del);
+    wpGrid.appendChild(card);
+    wpGet(id).then(it => { if (it) card.querySelector('img').src = it.data; });
+  });
+}
+function closeWp() { wpModal.classList.add('hidden'); wpGrid.innerHTML = ''; }
+btnBg.addEventListener('click', () => { wpStatus.textContent = ''; wpModal.classList.remove('hidden'); renderWp(); });
+$('btnWpClose').addEventListener('click', closeWp);
+$('btnWpAdd').addEventListener('click', () => bgInput.click());
+$('btnWpNone').addEventListener('click', async () => {
+  wp.active = null; applyBackground(null); await wpSaveIndex(); renderWp();
+  wpStatus.textContent = 'Background bawaan dipakai.';
+});
+bgInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  bgInput.value = '';
+  if (!file) return;
+  if (wp.ids.length >= WP_MAX) { wpStatus.textContent = `Penuh (maks ${WP_MAX} wallpaper). Hapus salah satu dulu.`; return; }
+  const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name);
+  if (isGif && file.size > 12 * 1024 * 1024) { wpStatus.textContent = 'GIF terlalu besar (maksimal 12 MB).'; return; }
+  wpStatus.textContent = 'Memproses...';
+  try {
+    const data = isGif ? await readAsDataUrl(file) : await imageToDataUrl(file);   // GIF dipakai apa adanya agar tetap beranimasi
+    const id = newId(), saved = await wpPut({ id, name: file.name, data });
+    wp.ids.push(id); wp.names[id] = file.name; wp.active = id;
+    await wpSaveIndex(); applyBackground(data); renderWp();
+    wpStatus.textContent = saved ? 'Wallpaper ditambahkan dan tersimpan.' : 'Wallpaper aktif, tapi tidak tersimpan (penyimpanan browser diblokir atau penuh).';
+  } catch (err) {
+    wpStatus.textContent = `Gagal memuat gambar (${err && err.message ? err.message : err}). Coba file lain.`;
+  }
+});
+
+/* ---- Hapus data (verifikasi ketik "remove") ---- */
+const eraseModal = $('eraseModal'), eraseInput = $('eraseInput'), btnEraseGo = $('btnEraseGo');
+$('btnErase').addEventListener('click', () => {
+  eraseInput.value = ''; btnEraseGo.disabled = true;
+  eraseModal.classList.remove('hidden'); eraseInput.focus();
+});
+$('btnEraseCancel').addEventListener('click', () => eraseModal.classList.add('hidden'));
+eraseInput.addEventListener('input', () => { btnEraseGo.disabled = eraseInput.value.trim() !== 'remove'; });
+btnEraseGo.addEventListener('click', async () => {
+  if (eraseInput.value.trim() !== 'remove') return;
+  btnEraseGo.disabled = true;
+  if (isPlaying) stopGame('DATA DIHAPUS. PILIH LAGU');
+  clearTimeout(idbTimer); dirty = false;
+  try { [SAVE_KEY, SAVE_BAK, BG_KEY, WP_LS].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+  try { await idbRun('readwrite', st => st.clear()); } catch (e) {}
+  Object.keys(wpMem).forEach(k => delete wpMem[k]);
+  wp = { ids: [], names: {}, active: null }; applyBackground(null);
+  save = freshSave();
+  nameInput.value = ''; renderAbout();
+  applyFx(); updateSpLabels(); renderShop();
+  $('saveStatus').textContent = 'Semua data sudah dihapus.';
+  eraseModal.classList.add('hidden');
+});
+
+/* ---- Rank berdasarkan persentase kemenangan ---- */
+const RANKS = [
+  { n: 'Pemula',   min: 0,   c1: '#9aa0a6', c2: '#5f6368', spd: 8 },
+  { n: 'Amateur',  min: 40,  c1: '#2ed573', c2: '#1b8f4a', spd: 7 },
+  { n: 'Semi Pro', min: 60,  c1: '#1e90ff', c2: '#00e5ff', spd: 6 },
+  { n: 'Pro',      min: 75,  c1: '#a55eea', c2: '#6c5ce7', spd: 5 },
+  { n: 'Epic',     min: 85,  c1: '#ff6bd6', c2: '#a23bff', spd: 4 },
+  { n: 'Legend',   min: 92,  c1: '#ffa502', c2: '#ff4757', spd: 3 },
+  { n: 'Godly',    min: 97,  c1: '#ffe27a', c2: '#ffffff', spd: 2 },
+  { n: 'Admin',    min: 100, c1: '#ff3b3b', c2: '#3bd1ff', spd: 1.5 }
+];
+function pctOf(h, t) { return !t ? 0 : h === t ? 100 : Math.min(99, Math.round(h / t * 100)); }
+function rankFor(h, t) {   // Admin hanya jika SEMUA bit benar
+  if (!t) return 0;
+  if (h === t) return 7;
+  const p = h / t * 100; let r = 0;
+  for (let i = 0; i < 7; i++) if (p >= RANKS[i].min) r = i;
+  return r;
+}
+const RK_ICO = ['🌱', '⚔️', '🛡️', '💎', '🔮', '🔥', '⚡', '👑'];
+function rankHtml(i, anim = '') {
+  if (i < 0) return '<div class="rank-none">Belum ada rank</div>';
+  const r = RANKS[i], n = 2 + i, down = anim === 'rk-down';
+  const orbit = Array.from({ length: n }, (_, k) => `<i style="--a:${Math.round(360 / n * k)}deg"></i>`).join('');
+  const burst = Array.from({ length: 16 }, (_, k) => {
+    const a = Math.PI * 2 * k / 16, d = 50 + (k % 4) * 16;
+    const dx = Math.cos(a) * d * 1.3, dy = down ? Math.abs(Math.sin(a)) * d + 24 : Math.sin(a) * d * 0.7;
+    return `<i style="--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;--h:${k * 22}"></i>`;
+  }).join('');
+  return `<div class="rank-wrap ${anim}" data-r="${i}" style="--c1:${r.c1};--c2:${r.c2};--spd:${r.spd}s;--g:${i + 1}">
+    <div class="rank-aura"></div><div class="rank-orbit"><div>${orbit}</div></div>
+    <div class="rank-frame ${i === 7 ? 'admin' : ''}"><div class="rank-badge"><span class="rk-ico">${RK_ICO[i]}</span><span class="rk-name">${r.n.toUpperCase()}</span></div></div>
+    <div class="rank-ring"></div><div class="rank-burst">${burst}</div></div>`;
+}
+function grantSecret() {
+  Object.values(CATS).forEach(([list, o]) => list.filter(x => x.secret).forEach(x => { if (!save[o].includes(x.id)) save[o].push(x.id); }));
+}
+
+/* ---- Overlay border game (Badai Petir / Galaksi Epik) ---- */
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function bfxHtml(kind) {
+  let h = '';
+  if (kind === 'storm') {
+    h = '<div class="st-rain">';
+    for (let i = 0; i < 40; i++) h += `<i class="st-r" style="--x:${rnd(0, 100).toFixed(1)}%;--l:${rnd(30, 80).toFixed(0)}px;--d:${rnd(0.5, 0.9).toFixed(2)};--dl:${rnd(0, 1).toFixed(2)}"></i>`;
+    h += '</div>';
+    [[15, 3.1, 0.4], [48, 4.3, 2], [78, 5.2, 3.3]].forEach(([x, d, dl]) => { h += `<b class="st-bolt" style="--x:${x}%;--d:${d};--dl:${dl}"></b>`; });
+    return h + '<div class="st-flash"></div><div class="bfx-ring"></div>';
+  }
+  if (kind === 'galaxy') {
+    h = '<div class="gx-neb"></div><div class="gx-st gx-s1"></div><div class="gx-st gx-s2"></div><div class="gx-st gx-s3"></div>';
+    for (let i = 0; i < 8; i++) h += `<i class="gx-mt" style="--x:${rnd(10, 110).toFixed(0)}%;--d:${rnd(1.6, 3.2).toFixed(2)};--dl:${rnd(0, 6).toFixed(2)};--h:${[190, 280, 330, 45][i % 4]}"></i>`;
+    return h + '<div class="gx-planet gx-p1"></div><div class="gx-planet gx-p2"></div><div class="gx-planet gx-p3"></div><div class="gx-rocket">🚀</div><div class="bfx-ring"></div>';
+  }
+  return '';
+}
+
+/* ---- Animasi pembukaan rank (sinematik + suara) ---- */
+const rvEl = $('rankReveal');
+let rvTimer = null, rvCb = null;
+function closeReveal() {
+  if (!rvEl.classList.contains('show') || rvEl.classList.contains('out')) return;
+  clearTimeout(rvTimer); rvEl.classList.add('out');
+  setTimeout(() => {
+    rvEl.className = ''; rvEl.innerHTML = '';
+    const f = rvCb; rvCb = null; if (f) f();
+  }, 450);
+}
+function revealSound(i, dir) {
+  try {
+    const c = audioContext; if (!c) return;
+    if (c.state !== 'running') c.resume();
+    const t = c.currentTime + 0.05, g = c.createGain(); g.gain.value = 0.25; g.connect(c.destination);
+    const tone = (type, f0, f1, t0, d, vol, rise) => {
+      const o = c.createOscillator(), v = c.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + d);
+      if (rise) { v.gain.setValueAtTime(0.001, t0); v.gain.exponentialRampToValueAtTime(vol, t0 + d); }
+      else { v.gain.setValueAtTime(vol, t0); v.gain.exponentialRampToValueAtTime(0.001, t0 + d); }
+      o.connect(v); v.connect(g); o.start(t0); o.stop(t0 + d + 0.05);
+    };
+    if (dir === 'down') { tone('sawtooth', 320, 40, t + 1, 0.9, 0.8); tone('sine', 120, 30, t + 1, 0.8, 1); return; }
+    tone('sawtooth', 90, 900, t, 1, 0.5, true);                  // pengisian energi
+    tone('sine', 140, 28, t + 1, 0.9, 1);                        // dentuman
+    [523, 659, 784, 1047, 1319].slice(0, 3 + (i >> 1)).forEach((f, k) => tone('triangle', f, f, t + 1.15 + k * 0.12, 0.8, 0.35));
+  } catch (e) {}
+}
+function playRankReveal(i, dir, txt, pct, cb) {
+  const r = RANKS[i], down = dir === 'down', first = /pertama/.test(txt);
+  const pcol = down ? ['#ff4757', '#c0392b', '#7f8c8d', '#ffffff'] : [r.c1, r.c2, '#ffffff'];
+  const col = k => i === 7 && !down ? `hsl(${k * 7},100%,65%)` : pcol[k % pcol.length];
+  const letters = [...r.n.toUpperCase()].map((c, k) => `<span style="--k:${k}">${c === ' ' ? '&nbsp;' : c}</span>`).join('');
+  let parts = '', conf = '';
+  for (let k = 0; k < 52; k++) {
+    const a = rnd(0, Math.PI * 2), d = rnd(140, 430);
+    parts += `<i style="--dx:${(Math.cos(a) * d).toFixed(0)}px;--dy:${(down ? rnd(120, 520) : Math.sin(a) * d * 0.8 + 40).toFixed(0)}px;--r:${rnd(-540, 540).toFixed(0)}deg;--s:${rnd(5, 12).toFixed(0)}px;--t:${rnd(1.1, 2).toFixed(2)}s;--pc:${col(k)}"></i>`;
+  }
+  if (!down && i >= 2) for (let k = 0; k < 30 + i * 3; k++)
+    conf += `<i style="--x:${rnd(0, 100).toFixed(0)}%;--dl:${(1.2 + rnd(0, 1.5)).toFixed(2)}s;--t:${rnd(2.2, 3.6).toFixed(2)}s;--sw:${rnd(-80, 80).toFixed(0)}px;--r:${rnd(360, 1080).toFixed(0)}deg;--pc:${col(k)}"></i>`;
+  const top = down ? '⬇ RANK TURUN' : dir === 'up' ? (first ? '✨ RANK PERTAMAMU' : '⬆ RANK NAIK') : 'RANK BERTAHAN';
+  rvEl.innerHTML = `<div class="rv ${dir}" data-r="${i}" style="--c1:${r.c1};--c2:${r.c2}">
+    <div class="rv-rays"></div><div class="rv-ring"></div><div class="rv-ring r2"></div><div class="rv-ring r3"></div><div class="rv-core"></div>
+    <b class="rv-bolt" style="--x:20%;--dl:1s"></b><b class="rv-bolt" style="--x:50%;--dl:1.5s"></b><b class="rv-bolt" style="--x:80%;--dl:2.1s"></b>
+    <div class="rv-stage"><div class="rv-top">${top}</div><div class="rv-ico">${RK_ICO[i]}</div><div class="rv-name">${letters}</div>
+      <div class="rv-sub">${txt}</div><div class="rv-pct">${pct}% kemenangan</div></div>
+    <div class="rv-conf">${conf}</div><div class="rv-parts">${parts}</div><div class="rv-flash"></div><div class="rv-skip">ketuk untuk lanjut</div></div>`;
+  rvEl.className = 'show'; rvCb = cb || null;
+  clearTimeout(rvTimer); rvTimer = setTimeout(closeReveal, i === 7 ? 6200 : 4800);
+  revealSound(i, dir);
+}
+rvEl.addEventListener('click', closeReveal);
+$('rankNow').addEventListener('click', () => {
+  if (save.rank < 0) return;
+  const lc = save.lastChange || { dir: 'same', txt: '' };
+  playRankReveal(save.rank, lc.dir, lc.txt, save.last ? save.last.pct : 0);
+});
+
+/* ---- About Me: nama pemain + kesimpulan + hasil lagu terakhir ---- */
+const aboutModal = $('aboutModal'), nameInput = $('nameInput');
+function renderAbout() {
+  $('aboutHello').textContent = `Halo, ${save.name || 'User'}!`;
+  $('stCombo').textContent = save.bestCombo; $('stBits').textContent = save.bits;
+  $('stSp').textContent = save.sp; $('stSongs').textContent = save.songs; $('stSpAll').textContent = save.spEarned;
+  const lc = save.lastChange;
+  $('rankNow').innerHTML = rankHtml(save.rank, lc ? 'rk-' + lc.dir : '');
+  $('rankDelta').className = 'rank-delta ' + (lc ? lc.dir : ''); $('rankDelta').textContent = lc ? lc.txt : '';
+  $('rankBest').innerHTML = rankHtml(save.bestRank, save.bestRank === 7 ? 'rk-same' : '');
+  $('rankLegend').textContent = 'Syarat: ' + RANKS.map((r, i) => i === 7 ? 'Admin 100% (benar semua)' : `${r.n} ≥${r.min}%`).join(' · ');
+  $('streakInfo').textContent = save.secret ? '🎁 Paket secret sudah terbuka, pakai di Shop.' : `🎁 Paket secret: ${Math.min(3, save.fullStreak)}/3 game berturut-turut dengan 100% benar.`;
+  const l = save.last, box = $('aboutLast');
+  box.innerHTML = '';
+  if (!l) { box.innerHTML = '<p>Belum ada lagu yang diselesaikan.</p>'; return; }
+  [['Judul', l.title], ['Durasi', l.dur], ['Selesai', l.at], ['Skor', l.score], ['Combo tertinggi', l.combo],
+   ['Bit tertekan', `${l.hit} dari ${l.total}`], ['Persentase kemenangan', `${l.pct}%`],
+   ['Perfect / Good / Miss', `${l.perfect} / ${l.good} / ${l.miss}`], ['SP didapat', `+${l.sp}`]].forEach(([k, v]) => {
+    const p = document.createElement('p'), a = document.createElement('span'), b = document.createElement('b');
+    a.textContent = k; b.textContent = v; p.append(a, b); box.appendChild(p);
+  });
+}
+function saveName() {
+  save.name = nameInput.value.trim().slice(0, 20);
+  const ok = persist() || idbOk;
+  renderAbout();
+  $('nameStatus').textContent = save.name ? (ok ? `Nama disimpan: ${save.name}` : 'Nama aktif, tapi tidak tersimpan (penyimpanan browser diblokir).') : 'Nama dikosongkan, kamu akan disapa sebagai "User".';
+}
+$('btnAbout').addEventListener('click', () => { nameInput.value = save.name; $('nameStatus').textContent = ''; renderAbout(); aboutModal.classList.remove('hidden'); });
+$('btnAboutClose').addEventListener('click', () => aboutModal.classList.add('hidden'));
+$('btnSaveName').addEventListener('click', saveName);
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveName(); });
+
+renderAbout();
+loadSaveIdb();
+wpInit();
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+
+window.addEventListener('resize', measureLayout);
+measureLayout();
+setControls();
+updateUI();
+</script>
+</body>
+</html>
